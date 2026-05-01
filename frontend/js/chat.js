@@ -26,20 +26,49 @@ function escapeHtml(str) {
 }
 
 /**
- * Very lightweight Markdown renderer for:
- * - **bold**, numbered lists, bullet lists, line breaks
+ * Markdown renderer that handles Gemini's structured output:
+ * **bold**, ## headers, numbered lists, bullet lists, line breaks
  */
 function renderMarkdown(text) {
-  return text
-    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>")
-    .replace(/\*(.*?)\*/g, "<em>$1</em>")
-    .replace(/^(\d+)\. (.+)$/gm, "<li>$2</li>")
-    .replace(/(<li>.*<\/li>)/s, "<ol>$1</ol>")
-    .replace(/^[-•] (.+)$/gm, "<li>$1</li>")
-    .replace(/\n{2,}/g, "</p><p>")
-    .replace(/\n/g, "<br/>");
+  // Escape HTML first
+  let html = text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+
+  // Section headers: **📋 Header** or ## Header → styled heading
+  html = html.replace(/^\*\*(📋|💡|📄|🗳️|📅|🔢|🏛️|ℹ️)?\s*(.+?)\*\*$/gm,
+    '<p class="bubble-section-header">$1 $2</p>');
+
+  // Inline bold: **text**
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+
+  // Italic: *text*
+  html = html.replace(/\*(.+?)\*/g, "<em>$1</em>");
+
+  // Numbered list items: "1. text"
+  html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="num-item">$1</li>');
+
+  // Wrap consecutive <li class="num-item"> in <ol>
+  html = html.replace(/(<li class="num-item">[\s\S]*?<\/li>)(\s*(?!<li class="num-item">))/g,
+    (match) => match.includes('<li class="num-item">') ? `<ol>${match}</ol>` : match);
+
+  // Bullet list items: "- text" or "• text"
+  html = html.replace(/^[-•]\s+(.+)$/gm, '<li class="bul-item">$1</li>');
+
+  // Wrap consecutive <li class="bul-item"> in <ul>
+  html = html.replace(/(<li class="bul-item">[\s\S]*?<\/li>)(\s*(?!<li class="bul-item">))/g,
+    (match) => `<ul>${match}</ul>`);
+
+  // Double newlines → paragraph break
+  html = html.replace(/\n{2,}/g, "<br/><br/>");
+
+  // Single newline → <br>
+  html = html.replace(/\n/g, "<br/>");
+
+  return html;
 }
+
 
 // ─── Auto-resize textarea ─────────────────────────────────
 inputEl.addEventListener("input", () => {

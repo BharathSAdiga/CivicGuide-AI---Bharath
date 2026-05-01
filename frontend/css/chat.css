@@ -350,6 +350,38 @@ html, body {
 .bubble li { margin-bottom: 0.3rem; }
 .bubble strong { font-weight: 600; }
 
+/* Structured response section headers */
+.bubble .bubble-section-header {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #a5b4fc;
+  text-transform: uppercase;
+  margin: 1rem 0 0.4rem !important;
+  padding-bottom: 0.25rem;
+  border-bottom: 1px solid rgba(165, 180, 252, 0.15);
+  display: block;
+}
+
+.bubble .bubble-section-header:first-child { margin-top: 0 !important; }
+
+/* Numbered list items */
+.bubble ol { list-style: decimal; }
+.bubble ol li.num-item {
+  padding-left: 0.25rem;
+  margin-bottom: 0.4rem;
+  line-height: 1.55;
+}
+
+/* Bullet list items */
+.bubble ul { list-style: disc; }
+.bubble ul li.bul-item {
+  padding-left: 0.25rem;
+  margin-bottom: 0.35rem;
+  line-height: 1.55;
+}
+
+
 .bubble-time {
   display: block;
   font-size: 0.7rem;
