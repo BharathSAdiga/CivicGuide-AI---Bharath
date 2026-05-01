@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CivicGuide AI — Your intelligent assistant for navigating government services, civic duties, and public resources with ease." />
+  <meta name="theme-color" content="#0a0e1a" />
+  <title>CivicGuide AI — Navigate Civic Life Intelligently</title>
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+  <!-- ── Navbar ─────────────────────────────────────────── -->
+  <nav class="navbar">
+    <a href="#" class="navbar-brand">
+      <div class="brand-icon">🏛️</div>
+      <span class="brand-name">CivicGuide AI</span>
+    </a>
+    <ul class="navbar-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#how-it-works">How It Works</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="/api/status" class="btn-nav" id="nav-cta">Get Started</a></li>
+    </ul>
+  </nav>
+
+  <!-- ── Hero ───────────────────────────────────────────── -->
+  <section class="hero" id="home">
+    <div class="hero-content">
+      <div class="hero-badge">
+        <span class="badge-dot"></span>
+        AI-Powered Civic Assistant
+      </div>
+      <h1 class="hero-title">
+        Navigate Government<br />
+        Services with <span class="gradient-text">AI Intelligence</span>
+      </h1>
+      <p class="hero-description">
+        CivicGuide AI simplifies your interaction with public services, civic duties,
+        and government resources — so you spend less time on bureaucracy and more
+        time on what matters.
+      </p>
+      <div class="hero-actions">
+        <a href="#features" class="btn-primary" id="hero-cta-primary">
+          Explore Features ↓
+        </a>
+        <a href="/api/status" class="btn-secondary" id="hero-cta-secondary">
+          Check API Status
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Stats Bar ─────────────────────────────────────── -->
+  <div class="stats-bar">
+    <div class="stat-item">
+      <span class="stat-number" id="stat-services">500+</span>
+      <span class="stat-label">Government Services Covered</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-number" id="stat-accuracy">98%</span>
+      <span class="stat-label">Response Accuracy</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-number" id="stat-users">10K+</span>
+      <span class="stat-label">Citizens Assisted</span>
+    </div>
+    <div class="stat-item">
+      <span class="stat-number" id="stat-time">< 3s</span>
+      <span class="stat-label">Average Response Time</span>
+    </div>
+  </div>
+
+  <!-- ── Features Section ──────────────────────────────── -->
+  <section class="section" id="features">
+    <div class="section-header reveal">
+      <div class="section-tag">Core Features</div>
+      <h2 class="section-title">Everything You Need for Civic Life</h2>
+      <p class="section-subtitle">
+        Powerful AI tools designed to make government services accessible,
+        understandable, and actionable for every citizen.
+      </p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card reveal" id="feature-guide">
+        <div class="feature-icon icon-blue">🗺️</div>
+        <h3 class="feature-title">Service Navigation</h3>
+        <p class="feature-desc">
+          Instantly find the right government office, portal, or procedure for any
+          civic need — from permits to passports.
+        </p>
+      </div>
+
+      <div class="feature-card reveal" id="feature-ai-chat">
+        <div class="feature-icon icon-indigo">🤖</div>
+        <h3 class="feature-title">AI Chat Assistant</h3>
+        <p class="feature-desc">
+          Ask questions in plain language and receive accurate, structured guidance
+          on forms, deadlines, and requirements.
+        </p>
+      </div>
+
+      <div class="feature-card reveal" id="feature-alerts">
+        <div class="feature-icon icon-cyan">🔔</div>
+        <h3 class="feature-title">Deadline Alerts</h3>
+        <p class="feature-desc">
+          Never miss a tax deadline, voter registration window, or license renewal
+          with smart, personalised reminders.
+        </p>
+      </div>
+
+      <div class="feature-card reveal" id="feature-docs">
+        <div class="feature-icon icon-emerald">📄</div>
+        <h3 class="feature-title">Document Guidance</h3>
+        <p class="feature-desc">
+          Step-by-step checklists for any application process — understand exactly
+          what documents you need, and why.
+        </p>
+      </div>
+
+      <div class="feature-card reveal" id="feature-multilang">
+        <div class="feature-icon icon-violet">🌐</div>
+        <h3 class="feature-title">Multilingual Support</h3>
+        <p class="feature-desc">
+          Civic guidance available in multiple regional languages, breaking down
+          language barriers in public service access.
+        </p>
+      </div>
+
+      <div class="feature-card reveal" id="feature-local">
+        <div class="feature-icon icon-amber">📍</div>
+        <h3 class="feature-title">Local Context</h3>
+        <p class="feature-desc">
+          Location-aware responses that reflect your state, district, or municipality's
+          specific rules and procedures.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How It Works ──────────────────────────────────── -->
+  <section class="section how-it-works" id="how-it-works">
+    <div class="section-header reveal">
+      <div class="section-tag">Process</div>
+      <h2 class="section-title">How CivicGuide AI Works</h2>
+      <p class="section-subtitle">
+        Three simple steps to get the civic guidance you need — no jargon, no confusion.
+      </p>
+    </div>
+
+    <div class="steps-container">
+      <div class="step-card reveal" id="step-1">
+        <div class="step-number">1</div>
+        <div class="step-content">
+          <h3>Ask Your Question</h3>
+          <p>
+            Type your civic query in plain language — "How do I renew my voter ID?"
+            or "What permits do I need to open a small business?"
+          </p>
+        </div>
+      </div>
+
+      <div class="step-card reveal" id="step-2">
+        <div class="step-number">2</div>
+        <div class="step-content">
+          <h3>AI Analyses &amp; Guides</h3>
+          <p>
+            Our AI processes your query against a curated knowledge base of government
+            services, laws, and procedures to provide accurate, up-to-date guidance.
+          </p>
+        </div>
+      </div>
+
+      <div class="step-card reveal" id="step-3">
+        <div class="step-number">3</div>
+        <div class="step-content">
+          <h3>Take Action Confidently</h3>
+          <p>
+            Receive a clear, structured response with links, document checklists,
+            deadlines, and next steps — ready to act immediately.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA Section ────────────────────────────────────── -->
+  <section class="cta-section" id="about">
+    <div class="cta-card reveal">
+      <h2>Ready to Simplify<br />Civic Life?</h2>
+      <p>
+        Join thousands of citizens who use CivicGuide AI to navigate
+        government services with confidence and clarity.
+      </p>
+      <a href="#features" class="btn-primary" id="cta-main">
+        Get Started — It's Free
+      </a>
+    </div>
+  </section>
+
+  <!-- ── Footer ─────────────────────────────────────────── -->
+  <footer>
+    <span class="footer-copy">© 2025 CivicGuide AI. Built to empower citizens.</span>
+    <div class="footer-links">
+      <a href="#">Privacy</a>
+      <a href="#">Terms</a>
+      <a href="/api/status">API</a>
+      <a href="#">GitHub</a>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
