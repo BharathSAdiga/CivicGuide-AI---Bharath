@@ -2,24 +2,27 @@
 
 /* ─── CSS Variables ─────────────────────────────────────── */
 :root {
-  --bg-primary: #0a0e1a;
-  --bg-secondary: #111827;
-  --bg-card: rgba(255, 255, 255, 0.04);
-  --accent-blue: #3b82f6;
-  --accent-indigo: #6366f1;
-  --accent-cyan: #06b6d4;
-  --accent-gradient: linear-gradient(135deg, #3b82f6, #6366f1, #06b6d4);
-  --text-primary: #f1f5f9;
-  --text-secondary: #94a3b8;
-  --text-muted: #475569;
+  --bg: #0b0f19;
+  --bg-card: rgba(17, 24, 39, 0.45);
+  --bg-input: rgba(26, 34, 53, 0.5);
+  --accent: #8b5cf6;
+  --accent-2: #3b82f6;
+  --accent-3: #d946ef;
+  --gradient: linear-gradient(135deg, #3b82f6, #8b5cf6, #d946ef);
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
   --border: rgba(255, 255, 255, 0.08);
-  --shadow-glow: 0 0 60px rgba(99, 102, 241, 0.15);
-  --radius: 16px;
-  --radius-sm: 8px;
-  --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  --user-bubble: linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --ai-bubble: rgba(26, 34, 53, 0.7);
+  --eligible-green: #4ade80;
+  --ineligible-amber: #fbbf24;
+  --error-red: #f87171;
+  --green: #22c55e;
+  --radius: 20px;
+  --radius-sm: 12px;
+  --transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
 }
 
-/* ─── Reset & Base ──────────────────────────────────────── */
 *, *::before, *::after {
   margin: 0;
   padding: 0;
@@ -347,6 +350,8 @@ body::before {
   transition: var(--transition);
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .feature-card::before {
@@ -422,6 +427,8 @@ body::before {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   transition: var(--transition);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .step-card:hover {
@@ -471,6 +478,8 @@ body::before {
   border-radius: 24px;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .cta-card::before {
@@ -560,3 +569,4 @@ footer {
   .cta-card { padding: 2.5rem 1.5rem; }
   footer { flex-direction: column; text-align: center; }
 }
+
