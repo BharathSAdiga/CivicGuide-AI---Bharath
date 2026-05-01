@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CivicGuide AI — Check your voter eligibility for Indian elections instantly." />
+  <title>Voter Eligibility Checker — CivicGuide AI</title>
+  <link rel="stylesheet" href="css/eligibility.css" />
+</head>
+<body>
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <a href="index.html" class="navbar-brand">
+      <div class="brand-icon">🏛️</div>
+      <span class="brand-name">CivicGuide AI</span>
+    </a>
+    <ul class="navbar-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="eligibility.html" class="active">Eligibility</a></li>
+      <li><a href="chat.html">Assistant</a></li>
+    </ul>
+  </nav>
+
+  <!-- Page Header -->
+  <header class="page-header">
+    <div class="page-tag">
+      <span class="page-tag-dot"></span>
+      Instant Check
+    </div>
+    <h1 class="page-title">
+      Are You Eligible<br />to <span class="gradient-text">Vote in India?</span>
+    </h1>
+    <p class="page-subtitle">
+      Enter your age and citizenship status to instantly find out if you can vote —
+      and what your next steps are.
+    </p>
+  </header>
+
+  <!-- Main Layout: Form + Result side by side -->
+  <main class="main-layout">
+
+    <!-- ── LEFT: Checker Form ──────────────────────────── -->
+    <section class="checker-card" aria-labelledby="form-title">
+      <h2 id="form-title">🗳️ Check Your Eligibility</h2>
+
+      <form id="eligibility-form" novalidate>
+
+        <!-- Age input -->
+        <div class="form-group">
+          <label for="age-input">Your Age</label>
+          <input
+            type="number"
+            id="age-input"
+            placeholder="Enter your age (e.g. 22)"
+            min="0"
+            max="130"
+            inputmode="numeric"
+            autocomplete="off"
+            aria-describedby="age-error"
+          />
+          <span class="input-error" id="age-error">Please enter a valid age.</span>
+        </div>
+
+        <!-- Citizenship toggle -->
+        <div class="form-group">
+          <label>Citizenship Status</label>
+          <div class="citizenship-toggle" role="radiogroup" aria-label="Citizenship status">
+
+            <div class="toggle-pill">
+              <input
+                type="radio"
+                name="citizenship"
+                id="citizen-yes"
+                value="indian"
+                checked
+              />
+              <label for="citizen-yes">
+                <span class="pill-icon">🇮🇳</span>
+                <span class="pill-label">Indian Citizen</span>
+              </label>
+            </div>
+
+            <div class="toggle-pill">
+              <input
+                type="radio"
+                name="citizenship"
+                id="citizen-no"
+                value="non-indian"
+              />
+              <label for="citizen-no">
+                <span class="pill-icon">🌍</span>
+                <span class="pill-label">Non-Indian / NRI</span>
+              </label>
+            </div>
+
+          </div>
+        </div>
+
+        <button type="submit" class="check-btn" id="check-btn">
+          <span class="spinner" id="spinner"></span>
+          <span id="btn-label">Check Eligibility →</span>
+        </button>
+
+      </form>
+    </section>
+
+    <!-- ── RIGHT: Result Panel ─────────────────────────── -->
+    <section class="result-panel" aria-live="polite" aria-label="Eligibility result">
+
+      <!-- Empty State -->
+      <div class="result-empty" id="result-empty">
+        <div class="result-empty-icon">📋</div>
+        <h3>Your result will appear here</h3>
+        <p>Fill in your details on the left and click "Check Eligibility".</p>
+      </div>
+
+      <!-- Result Card (shown after check) -->
+      <div class="result-card" id="result-card">
+
+        <!-- Status Banner -->
+        <div class="result-banner" id="result-banner">
+          <div class="result-status-row">
+            <div class="result-icon" id="result-icon">✅</div>
+            <div>
+              <div class="result-verdict" id="result-verdict">Eligible to Vote</div>
+            </div>
+          </div>
+          <div class="criteria-badges" id="criteria-badges"></div>
+        </div>
+
+        <!-- Body -->
+        <div class="result-body">
+
+          <div class="result-section">
+            <h4>📝 Explanation</h4>
+            <p class="result-explanation" id="result-explanation"></p>
+          </div>
+
+          <div class="result-section">
+            <h4>👣 Next Steps</h4>
+            <ul class="next-steps-list" id="next-steps-list"></ul>
+          </div>
+
+        </div>
+
+        <!-- Actions -->
+        <div class="result-actions" id="result-actions"></div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Info Cards -->
+  <section class="info-section" aria-label="Eligibility information">
+    <div class="info-card">
+      <div class="info-icon">🎂</div>
+      <h3>Minimum Age: 18</h3>
+      <p>You must be at least 18 years old on the qualifying date (1st January of the year) to register as a voter.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">🇮🇳</div>
+      <h3>Indian Citizenship</h3>
+      <p>Only Indian citizens can vote in Indian elections. NRIs with valid Indian passports may register under special provisions.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">📋</div>
+      <h3>Electoral Roll</h3>
+      <p>Even if eligible, your name must appear on the Electoral Roll. Register using Form 6 at voters.eci.gov.in.</p>
+    </div>
+    <div class="info-card">
+      <div class="info-icon">🚫</div>
+      <h3>Disqualifications</h3>
+      <p>You may be disqualified if declared of unsound mind by a court, or convicted of certain offences. Check ECI guidelines.</p>
+    </div>
+  </section>
+
+  <script src="js/eligibility.js"></script>
+</body>
+</html>
