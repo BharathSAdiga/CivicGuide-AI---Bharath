@@ -6,7 +6,7 @@ flask-cors>=4.0.0       # Cross-Origin Resource Sharing headers
 python-dotenv>=1.0.0    # Load .env files into os.environ
 
 # ── AI ─────────────────────────────────────────────────────────────────────
-google-generativeai>=0.7.0  # Gemini API client (chat, content generation)
+google-genai>=1.0.0         # Gemini API client — new official SDK (replaces google-generativeai)
 
 # ── Production Server ──────────────────────────────────────────────────────
 gunicorn>=21.2.0        # WSGI server for deployment (not needed for dev)
