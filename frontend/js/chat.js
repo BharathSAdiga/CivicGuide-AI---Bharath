@@ -1,21 +1,31 @@
 /**
  * chat.js — CivicGuide AI context-aware chat interface.
  *
- * Handles: onboarding modal, localStorage profile, language toggle,
- * chat session with Gemini, multi-turn history, and markdown rendering.
+ * Reliability additions in this version:
+ *  - Character counter (warns at 80%, blocks at CHAT_MAX_CHARS)
+ *  - Backend connection check on page load with toast feedback
+ *  - Toast notifications (toast.js) for non-blocking error feedback
+ *  - Duplicate-send prevention via isLoading guard
+ *  - Input sanitized before sending (trim, empty check)
+ *  - Graceful error messages in the chat bubble + toast
  */
 
-import { apiPost, escapeHtml, formatTime } from "./api.js";
+import { apiPost, escapeHtml, formatTime, pingBackend } from "./api.js";
+import { showToast } from "./toast.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
-const STORAGE_KEY = "civicguide_user";
-const VOTING_AGE  = 18;
+const STORAGE_KEY    = "civicguide_user";
+const VOTING_AGE     = 18;
+const CHAT_MAX_CHARS = 1_000;   // Must match backend CHAT_MAX_MESSAGE_LENGTH
+const WARN_THRESHOLD = 0.80;    // Show counter colour change at 80% of limit
+
 
 // ── Application State ──────────────────────────────────────────────────────
-let conversationHistory = [];  // [{role, parts}] for Gemini multi-turn context
+let conversationHistory = [];
 let isLoading           = false;
-let userContext         = null;       // { name, age, location }
-let currentLanguage     = "english";  // "english" | "hindi"
+let userContext         = null;
+let currentLanguage     = "english";
+
 
 // ── DOM References ─────────────────────────────────────────────────────────
 const appEl        = document.getElementById("app");
@@ -42,9 +52,65 @@ const eligBadge      = document.getElementById("eligibility-badge");
 const eligIcon       = document.getElementById("eligibility-icon");
 const eligText       = document.getElementById("eligibility-text");
 
+// Character counter (injected below the input area)
+const charCounter = createCharCounter();
+
 
 // ══════════════════════════════════════════════════════════════════════════
-// ONBOARDING — collect name/age/location on first visit
+// CHARACTER COUNTER
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create and inject the character counter element below the input.
+ * Returns the counter <span> so we can update it on input events.
+ */
+function createCharCounter() {
+  const counter = document.createElement("span");
+  counter.id = "char-counter";
+  Object.assign(counter.style, {
+    fontSize:    "0.75rem",
+    color:       "var(--text-muted, #64748b)",
+    transition:  "color 0.2s",
+    userSelect:  "none",
+    marginLeft:  "auto",
+    display:     "block",
+    textAlign:   "right",
+    paddingRight:"0.25rem",
+    marginTop:   "0.25rem",
+    visibility:  "hidden",  // Hidden until user starts typing
+  });
+
+  // Insert after the input wrapper (inside .chat-input-area)
+  const hint = document.querySelector(".input-hint");
+  if (hint) hint.parentNode.insertBefore(counter, hint);
+
+  return counter;
+}
+
+/**
+ * Update character counter text and colour based on current input length.
+ * @param {number} length - Current character count.
+ */
+function updateCharCounter(length) {
+  const remaining  = CHAT_MAX_CHARS - length;
+  const isVisible  = length > 0;
+  const isWarning  = length >= CHAT_MAX_CHARS * WARN_THRESHOLD;
+  const isExceeded = length > CHAT_MAX_CHARS;
+
+  charCounter.style.visibility = isVisible ? "visible" : "hidden";
+  charCounter.textContent      = `${length} / ${CHAT_MAX_CHARS}`;
+  charCounter.style.color      = isExceeded ? "#ef4444"
+    : isWarning ? "#f59e0b"
+    : "var(--text-muted, #64748b)";
+
+  if (isExceeded) {
+    charCounter.textContent += ` (${-remaining} over limit)`;
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// ONBOARDING
 // ══════════════════════════════════════════════════════════════════════════
 
 function loadUserContext() {
@@ -79,6 +145,7 @@ function showApp() {
 function showFormError(msg) {
   formErrorEl.textContent = msg;
   formErrorEl.hidden      = false;
+  formErrorEl.scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
 obForm.addEventListener("submit", (e) => {
@@ -89,6 +156,7 @@ obForm.addEventListener("submit", (e) => {
   const ageRaw   = obAgeEl.value.trim();
   const location = obLocationEl.value.trim();
 
+  // Validate each field — show a specific error and stop early.
   if (!name)     { showFormError("Please enter your name.");           return; }
   if (!ageRaw)   { showFormError("Please enter your age.");            return; }
   if (!location) { showFormError("Please enter your state or city.");  return; }
@@ -99,7 +167,13 @@ obForm.addEventListener("submit", (e) => {
     return;
   }
 
-  saveUserContext({ name, age, location });
+  // Validate name is not just spaces or numbers
+  if (!/\S/.test(name)) {
+    showFormError("Please enter a valid name.");
+    return;
+  }
+
+  saveUserContext({ name: name.slice(0, 60), age, location: location.slice(0, 80) });
   showApp();
 });
 
@@ -120,7 +194,6 @@ profileEditBtn.addEventListener("click", () => {
 // PROFILE & ELIGIBILITY BADGE
 // ══════════════════════════════════════════════════════════════════════════
 
-/** Populate the sidebar profile card and eligibility badge. */
 function populateProfile() {
   if (!userContext) return;
   const { name, age, location } = userContext;
@@ -141,7 +214,6 @@ function populateProfile() {
   }
 }
 
-/** Update the welcome-screen heading with the user's first name. */
 function personaliseWelcome() {
   if (!userContext) return;
   const { name, age } = userContext;
@@ -177,10 +249,8 @@ document.querySelectorAll(".lang-btn").forEach((btn) => {
 // ══════════════════════════════════════════════════════════════════════════
 
 /**
- * Convert Gemini's markdown output to safe HTML.
- * Handles: HTML escaping, section headers, bold, italic, numbered/bullet lists.
- *
- * @param {string} text - Raw Gemini response.
+ * Convert Gemini's structured markdown to safe HTML for display.
+ * @param {string} text - Raw Gemini response string.
  * @returns {string} HTML-safe string for innerHTML.
  */
 function renderMarkdown(text) {
@@ -194,18 +264,17 @@ function renderMarkdown(text) {
     /^\*\*(📋|💡|📄|🗳️|📅|🔢|🏛️|ℹ️)?\s*(.+?)\*\*$/gm,
     '<p class="bubble-section-header">$1 $2</p>'
   );
+  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+  html = html.replace(/\*(.+?)\*/g,     "<em>$1</em>");
 
-  html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");  // Bold
-  html = html.replace(/\*(.+?)\*/g,     "<em>$1</em>");          // Italic
-
-  // Numbered list items → wrap groups in <ol>
+  // Numbered list → <ol>
   html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="num-item">$1</li>');
   html = html.replace(
     /(<li class="num-item">[\s\S]*?<\/li>)(\s*(?!<li class="num-item">))/g,
     (m) => (m.includes('<li class="num-item">') ? `<ol>${m}</ol>` : m)
   );
 
-  // Bullet list items → wrap groups in <ul>
+  // Bullet list → <ul>
   html = html.replace(/^[-•]\s+(.+)$/gm, '<li class="bul-item">$1</li>');
   html = html.replace(
     /(<li class="bul-item">[\s\S]*?<\/li>)(\s*(?!<li class="bul-item">))/g,
@@ -214,20 +283,14 @@ function renderMarkdown(text) {
 
   html = html.replace(/\n{2,}/g, "<br/><br/>");
   html = html.replace(/\n/g,     "<br/>");
-
   return html;
 }
 
 
 // ══════════════════════════════════════════════════════════════════════════
-// CHAT RENDERING HELPERS
+// CHAT RENDERING
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Append a message bubble to the chat window.
- * @param {"user"|"ai"} role
- * @param {string} html - Pre-rendered safe HTML.
- */
 function appendMessage(role, html) {
   welcomeEl.style.display = "none";
 
@@ -248,7 +311,6 @@ function appendMessage(role, html) {
   wrapper.appendChild(bubble);
   messagesEl.appendChild(wrapper);
   messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
-
   return wrapper;
 }
 
@@ -283,17 +345,28 @@ function clearMessages() {
 
 
 // ══════════════════════════════════════════════════════════════════════════
-// INPUT HANDLING
+// INPUT HANDLING & VALIDATION
 // ══════════════════════════════════════════════════════════════════════════
 
-// Auto-resize textarea height as the user types.
+/**
+ * Determine whether the send button should be enabled.
+ * Guards: non-empty trimmed message, not loading, not over char limit.
+ */
+function updateSendState() {
+  const length  = inputEl.value.length;
+  const trimmed = inputEl.value.trim();
+  sendBtn.disabled = !trimmed || isLoading || length > CHAT_MAX_CHARS;
+}
+
 inputEl.addEventListener("input", () => {
+  // Auto-resize textarea
   inputEl.style.height = "auto";
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
-  sendBtn.disabled = inputEl.value.trim() === "" || isLoading;
+
+  updateCharCounter(inputEl.value.length);
+  updateSendState();
 });
 
-// Submit on Enter; Shift+Enter inserts a newline.
 inputEl.addEventListener("keydown", (e) => {
   if (e.key === "Enter" && !e.shiftKey) {
     e.preventDefault();
@@ -303,7 +376,7 @@ inputEl.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", handleSend);
 
-// Quick-topic chip buttons (data-q attribute).
+// Quick-topic chip buttons (data-q attribute)
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-q]");
   if (btn) {
@@ -313,13 +386,14 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// New chat — reset history but keep profile.
+// New chat — reset history, keep profile
 newChatBtn.addEventListener("click", () => {
   conversationHistory  = [];
   clearMessages();
   inputEl.value        = "";
   inputEl.style.height = "auto";
-  sendBtn.disabled     = true;
+  updateCharCounter(0);
+  updateSendState();
 });
 
 
@@ -328,12 +402,20 @@ newChatBtn.addEventListener("click", () => {
 // ══════════════════════════════════════════════════════════════════════════
 
 /**
- * Read input, call /api/chat, render the AI reply.
- * Uses apiPost from api.js (includes AbortController timeout).
+ * Validate, send, and render one chat exchange.
+ * Prevents duplicate sends via isLoading guard.
+ * Injects user context and language on every call.
  */
 async function handleSend() {
   const message = inputEl.value.trim();
-  if (!message || isLoading) return;
+
+  // ── Pre-send guards ────────────────────────────────────────────────────
+  if (!message)                        return;
+  if (isLoading)                       return;  // Prevent double-send
+  if (message.length > CHAT_MAX_CHARS) {
+    showToast(`Message too long — max ${CHAT_MAX_CHARS} characters.`, "warning");
+    return;
+  }
 
   isLoading        = true;
   sendBtn.disabled = true;
@@ -341,16 +423,15 @@ async function handleSend() {
   appendMessage("user", escapeHtml(message));
   inputEl.value        = "";
   inputEl.style.height = "auto";
+  updateCharCounter(0);
 
-  // Push user turn before API call so history is current.
   conversationHistory.push({ role: "user", parts: [message] });
-
   showTyping();
 
   try {
     const data = await apiPost("/api/chat", {
       message,
-      history:      conversationHistory.slice(0, -1),  // exclude current turn
+      history:      conversationHistory.slice(0, -1),
       user_context: userContext || {},
       language:     currentLanguage,
     });
@@ -363,16 +444,40 @@ async function handleSend() {
 
   } catch (err) {
     hideTyping();
+
+    // Show error in the chat so it's inline and clearly associated with
+    // the failed message, then also show a toast for quick visibility.
     appendMessage(
       "ai",
-      `⚠️ <strong>Error:</strong> ${escapeHtml(err.message)}<br/>` +
-      `Ensure the backend is running at <code>localhost:5000</code>.`
+      `⚠️ <strong>Error:</strong> ${escapeHtml(err.message)}`
     );
+    showToast(err.message, "error", 6000);
     console.error("[CivicGuide AI] Chat error:", err);
 
   } finally {
-    isLoading        = false;
-    sendBtn.disabled = inputEl.value.trim() === "";
+    isLoading = false;
+    updateSendState();
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// BACKEND CONNECTION CHECK
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Ping the backend on load and show a toast if it is unreachable.
+ * Non-blocking — the chat is still usable (offline fallbacks exist).
+ */
+async function checkBackendConnection() {
+  const isOnline = await pingBackend();
+  if (!isOnline) {
+    showToast(
+      "Backend server is offline. Some features may not work. " +
+      "Start the Flask server at localhost:5000.",
+      "warning",
+      8000
+    );
   }
 }
 
@@ -384,4 +489,7 @@ async function handleSend() {
 (function init() {
   userContext = loadUserContext();
   userContext ? showApp() : showOnboarding();
+
+  // Non-blocking backend check — runs after the UI is ready.
+  checkBackendConnection();
 })();

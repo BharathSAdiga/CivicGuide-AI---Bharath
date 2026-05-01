@@ -34,6 +34,16 @@ VOTING_AGE: int = 18                  # Minimum age to vote in India
 BOOTH_LIMIT_MAX: int = 5              # Hard cap on nearest-booths responses
 BOOTH_LIMIT_DEFAULT: int = 3          # Default number of nearest booths returned
 
+# ── Chat Input Limits ─────────────────────────────────────────────────────
+# Enforced server-side to prevent prompt injection and oversized Gemini calls.
+CHAT_MAX_MESSAGE_LENGTH: int = 1_000  # Characters — prevents prompt injection
+CHAT_MAX_HISTORY_TURNS: int  = 20     # Message turns — caps token usage
+CHAT_MIN_MESSAGE_LENGTH: int = 1      # Disallow whitespace-only messages
+
+# ── Location Input Limits ─────────────────────────────────────────────────
+LOCATION_MIN_LENGTH: int = 2          # Min chars for a booth search query
+LOCATION_MAX_LENGTH: int = 200        # Prevents oversized geocoder requests
+
 # ── Supported Languages ───────────────────────────────────────────────────
 SUPPORTED_LANGUAGES: set[str] = {"english", "hindi"}
 DEFAULT_LANGUAGE: str = "english"

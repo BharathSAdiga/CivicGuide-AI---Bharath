@@ -53,6 +53,8 @@
             id="location-input"
             placeholder="Enter area, city (e.g. Koramangala, Bengaluru)"
             autocomplete="off"
+            inputmode="search"
+            maxlength="200"
             aria-label="Location search"
           />
         </div>
@@ -98,7 +100,7 @@
   <script>
     window.GMAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
   </script>
-  <script src="js/booths.js"></script>
+  <script type="module" src="js/booths.js"></script>
   <script
     src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"
     async defer

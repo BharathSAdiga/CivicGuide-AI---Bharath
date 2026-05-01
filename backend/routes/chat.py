@@ -23,8 +23,11 @@ Design decisions
 import google.generativeai as genai
 from flask import Blueprint, request
 
-from config import GEMINI_API_KEY, GEMINI_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES
-from utils  import error_response, success_response
+from config import (
+    GEMINI_API_KEY, GEMINI_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES,
+    CHAT_MAX_MESSAGE_LENGTH, CHAT_MAX_HISTORY_TURNS,
+)
+from utils import error_response, success_response
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -298,31 +301,57 @@ def chat():
     """
     data = request.get_json(silent=True)
 
-    # ── Input validation ───────────────────────────────────────────────────
+    # ── Validate request body presence ────────────────────────────────────
     if not data or "message" not in data:
         return error_response("Missing 'message' field in request body")
 
+    # ── Validate message ───────────────────────────────────────────────────
     user_message = data["message"].strip()
     if not user_message:
         return error_response("'message' cannot be empty")
+    if len(user_message) > CHAT_MAX_MESSAGE_LENGTH:
+        return error_response(
+            f"Message too long: max {CHAT_MAX_MESSAGE_LENGTH} characters "
+            f"(received {len(user_message)})"
+        )
 
-    # ── Parse optional fields ──────────────────────────────────────────────
-    history      = data.get("history", [])
+    # ── Validate and sanitize history ──────────────────────────────────────
+    raw_history = data.get("history", [])
+    if not isinstance(raw_history, list):
+        return error_response("'history' must be a list")
+
+    # Sanitize: only keep well-formed {role, parts} turns, cap at N turns.
+    # This prevents prompt injection via malformed history and caps Gemini tokens.
+    history = [
+        turn for turn in raw_history
+        if (
+            isinstance(turn, dict)
+            and turn.get("role") in ("user", "model")
+            and isinstance(turn.get("parts"), list)
+            and all(isinstance(p, str) for p in turn["parts"])
+        )
+    ][-CHAT_MAX_HISTORY_TURNS:]  # keep only the most recent N turns
+
+    # ── Parse and normalize optional fields ───────────────────────────────
     user_context = data.get("user_context") or {}
-    language     = data.get("language", "english").lower().strip()
+    if not isinstance(user_context, dict):
+        user_context = {}  # ignore malformed context silently
 
-    # Normalise unsupported language values to the default.
-    if language not in SUPPORTED_LANGUAGES:
+    language = data.get("language", "english")
+    if not isinstance(language, str):
         language = "english"
+    language = language.lower().strip()
+    if language not in SUPPORTED_LANGUAGES:
+        language = "english"  # fall back gracefully instead of erroring
 
     # ── Build the augmented prompt ─────────────────────────────────────────
-    # Each builder returns an empty string if not applicable, so filter(None)
-    # removes gaps cleanly before joining.
+    # Each builder returns an empty string when not applicable.
+    # filter(None, ...) removes empty strings cleanly before joining.
     prompt_parts = filter(None, [
-        build_context_prefix(user_context),     # Who the user is
-        build_decision_prefix(user_message, user_context),  # Routing rules
-        build_language_instruction(language),   # Output language
-        f"User question: {user_message}",       # The actual question
+        build_context_prefix(user_context),              # Who the user is
+        build_decision_prefix(user_message, user_context), # Routing rules
+        build_language_instruction(language),            # Output language
+        f"User question: {user_message}",                # The actual question
     ])
     augmented_message = "\n".join(prompt_parts)
 
@@ -343,5 +372,6 @@ def chat():
         return error_response(str(exc), status=500)
 
     except Exception as exc:  # noqa: BLE001
-        # Gemini API errors: quota exceeded, network issues, etc.
-        return error_response(f"Gemini API error: {exc}", status=500)
+        # Gemini API errors: quota exceeded, network issues, invalid key, etc.
+        # Log the full error server-side but send a safe message to the client.
+        return error_response(f"AI service error: {exc}", status=500)

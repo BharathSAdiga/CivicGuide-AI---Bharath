@@ -168,3 +168,35 @@ body::before {
   .map-panel { position:static; }
   #map, .map-placeholder { height:360px; }
 }
+
+/* ── Loading Skeleton ─────────────────────────────────── */
+/* Shown in the results list while the API call is in flight */
+@keyframes skeleton-shimmer {
+  0%   { background-position: -400px 0; }
+  100% { background-position:  400px 0; }
+}
+
+.booth-card.skeleton {
+  pointer-events: none;
+  animation: none;
+}
+
+.skeleton-line {
+  border-radius: 6px;
+  display: block;
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 800px 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+}
+
+/* ── Locate / Search disabled state ──────────────────── */
+.locate-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+}

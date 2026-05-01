@@ -1,14 +1,21 @@
 /**
  * eligibility.js — CivicGuide AI voter eligibility checker.
  *
- * Handles form submission, API call to /api/eligibility, result rendering,
- * and a graceful client-side fallback when the backend is unreachable.
+ * Reliability additions:
+ *  - Age field validated: integer, realistic range [0-130], no letters
+ *  - Loading state prevents duplicate submissions
+ *  - Toast notifications for backend errors (non-blocking)
+ *  - Graceful offline fallback when backend is unreachable
+ *  - Error cleared on new input
  */
 
 import { apiPost, escapeHtml } from "./api.js";
+import { showToast } from "./toast.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const VOTING_AGE = 18;
+const AGE_MIN    = 0;
+const AGE_MAX    = 130;
 
 // ── DOM References ─────────────────────────────────────────────────────────
 const form          = document.getElementById("eligibility-form");
@@ -29,49 +36,74 @@ const nextStepsList = document.getElementById("next-steps-list");
 const resultActions = document.getElementById("result-actions");
 
 
-// ── UI Helpers ─────────────────────────────────────────────────────────────
+// ── Loading State ──────────────────────────────────────────────────────────
 
-/** Toggle the button loading state during API call. */
+/** Toggle the submit button into a loading state. */
 function setLoading(on) {
   checkBtn.disabled     = on;
   spinner.style.display = on ? "block" : "none";
   btnLabel.textContent  = on ? "Checking…" : "Check Eligibility →";
 }
 
-/** Show an inline validation error below the age field. */
+
+// ── Validation ─────────────────────────────────────────────────────────────
+
+/** Show an inline error below the age field. */
 function showAgeError(msg) {
   ageError.textContent        = msg;
   ageError.style.display      = "block";
+  ageInput.setAttribute("aria-invalid", "true");
   ageInput.style.borderColor  = "rgba(248,113,113,0.6)";
 }
 
 /** Clear the age field validation error. */
 function clearAgeError() {
-  ageError.style.display     = "none";
-  ageInput.style.borderColor = "";
+  ageError.style.display      = "none";
+  ageInput.removeAttribute("aria-invalid");
+  ageInput.style.borderColor  = "";
 }
 
-/** Read the selected citizenship radio button value. Defaults to "indian". */
+/** Read the selected citizenship radio button. Defaults to "indian". */
 function getCitizenshipValue() {
   return document.querySelector('input[name="citizenship"]:checked')?.value ?? "indian";
+}
+
+/**
+ * Validate the age input.
+ * Returns { valid: true, age } on success, or { valid: false, errorMsg } on failure.
+ */
+function validateAge(rawValue) {
+  const trimmed = rawValue.trim();
+
+  if (!trimmed) {
+    return { valid: false, errorMsg: "Please enter your age." };
+  }
+  if (!/^\d+$/.test(trimmed)) {
+    return { valid: false, errorMsg: "Age must be a whole number (no decimals or letters)." };
+  }
+
+  const age = parseInt(trimmed, 10);
+  if (age < AGE_MIN || age > AGE_MAX) {
+    return { valid: false, errorMsg: `Age must be between ${AGE_MIN} and ${AGE_MAX}.` };
+  }
+
+  return { valid: true, age };
 }
 
 
 // ── Result Renderer ────────────────────────────────────────────────────────
 
 /**
- * Render the eligibility result card with verdict, criteria badges,
- * explanation, next steps, and action buttons.
- *
+ * Render the eligibility result panel.
  * @param {object} data - Response from /api/eligibility or clientFallback().
  */
 function renderResult(data) {
   const { eligible, age_eligible, citizenship_eligible, explanation, next_steps } = data;
 
-  // Banner colour (green = eligible, red = ineligible)
+  // Banner state
   resultBanner.className = `result-banner ${eligible ? "eligible-banner" : "ineligible-banner"}`;
 
-  // Icon and verdict text — 4 distinct states
+  // Icon + verdict — 4 distinct states
   if (eligible) {
     resultIcon.textContent    = "✅";
     resultVerdict.textContent = "Eligible to Vote!";
@@ -86,7 +118,7 @@ function renderResult(data) {
     resultVerdict.textContent = "Not Eligible";
   }
 
-  // Criteria badges — pass/fail for each criterion
+  // Criteria pass/fail badges
   criteriaBadges.innerHTML = `
     <span class="badge ${age_eligible         ? "pass" : "fail"}">
       ${age_eligible         ? "✔" : "✘"} Age
@@ -96,11 +128,10 @@ function renderResult(data) {
     </span>
   `;
 
-  // Human-readable explanation
   resultExpl.textContent = explanation;
 
   // Numbered next-steps list
-  nextStepsList.innerHTML = next_steps
+  nextStepsList.innerHTML = (next_steps || [])
     .map((step, i) => `
       <li>
         <span class="step-num">${i + 1}</span>
@@ -108,7 +139,7 @@ function renderResult(data) {
       </li>`)
     .join("");
 
-  // Action buttons — context-appropriate for eligible vs ineligible
+  // Context-appropriate action buttons
   resultActions.innerHTML = eligible
     ? `<a href="https://voters.eci.gov.in" target="_blank" rel="noopener" class="btn-solid">
          Register to Vote →
@@ -119,13 +150,13 @@ function renderResult(data) {
          Visit ECI →
        </a>`;
 
-  // Show the card with a re-trigger animation
-  resultEmpty.style.display      = "none";
-  resultCard.style.display       = "block";
-  resultCard.style.animation     = "none";
+  // Animate result card in
+  resultEmpty.style.display   = "none";
+  resultCard.style.display    = "block";
+  resultCard.style.animation  = "none";
   requestAnimationFrame(() => { resultCard.style.animation = ""; });
 
-  // On mobile, scroll the result into view
+  // Scroll result into view on mobile
   if (window.innerWidth < 768) {
     resultCard.scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -136,11 +167,11 @@ function renderResult(data) {
 
 /**
  * Mirror the backend eligibility logic client-side.
- * Used when the backend is unreachable so the page remains functional offline.
+ * Used when the backend is unreachable so the page remains functional.
  *
  * @param {number}  age       - Voter's age.
  * @param {boolean} isCitizen - True if Indian citizen.
- * @returns {object} Same shape as the /api/eligibility response.
+ * @returns {object} Same shape as /api/eligibility response.
  */
 function clientFallback(age, isCitizen) {
   const ageOk    = age >= VOTING_AGE;
@@ -196,33 +227,35 @@ form.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearAgeError();
 
-  // Validate age field
-  const ageRaw = ageInput.value.trim();
-  if (!ageRaw) { showAgeError("Please enter your age."); return; }
-
-  const age = parseInt(ageRaw, 10);
-  if (isNaN(age) || age < 0 || age > 130) {
-    showAgeError("Please enter a valid age between 0 and 130.");
+  // Validate age with the dedicated validator
+  const validation = validateAge(ageInput.value);
+  if (!validation.valid) {
+    showAgeError(validation.errorMsg);
+    ageInput.focus();
     return;
   }
 
+  const { age } = validation;
   const citizenship = getCitizenshipValue();
+
+  // Prevent double submission
+  if (checkBtn.disabled) return;
   setLoading(true);
 
   try {
-    // apiPost from api.js includes timeout via AbortController.
     const data = await apiPost("/api/eligibility", { age, citizenship });
     renderResult(data);
 
   } catch (err) {
     console.warn("[CivicGuide AI] Backend unreachable — using client fallback:", err.message);
-    // Graceful degradation: run the same logic client-side.
+    // Use client-side fallback so the checker still works offline.
     renderResult(clientFallback(age, citizenship === "indian"));
+    showToast("Backend offline — showing local result.", "warning", 5000);
 
   } finally {
     setLoading(false);
   }
 });
 
-// Clear validation error as the user corrects their input.
+// Clear age validation error as the user corrects their input.
 ageInput.addEventListener("input", clearAgeError);
