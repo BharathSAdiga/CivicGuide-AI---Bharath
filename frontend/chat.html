@@ -9,7 +9,81 @@
 </head>
 <body>
 
-<div class="app">
+<!-- ══════════════════════════════════════════════════════════
+     ONBOARDING MODAL
+     Shown on first visit; stores name/age/location in localStorage
+════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+  <div class="modal-card">
+
+    <div class="modal-icon">🗳️</div>
+    <h2 class="modal-title" id="modal-title">Welcome to CivicGuide AI</h2>
+    <p class="modal-subtitle">
+      Tell us a little about yourself so we can give you personalised guidance
+      on India's election process.
+    </p>
+
+    <form id="onboarding-form" novalidate>
+
+      <div class="form-group">
+        <label for="ob-name">Your Name</label>
+        <input
+          type="text"
+          id="ob-name"
+          placeholder="e.g. Priya Sharma"
+          maxlength="60"
+          autocomplete="given-name"
+          required
+        />
+        <span class="field-hint">We'll address you by name in responses.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="ob-age">Your Age</label>
+        <input
+          type="number"
+          id="ob-age"
+          placeholder="e.g. 22"
+          min="5"
+          max="120"
+          required
+        />
+        <span class="field-hint">Helps us tell you if you're eligible to vote.</span>
+      </div>
+
+      <div class="form-group">
+        <label for="ob-location">Your State / City</label>
+        <input
+          type="text"
+          id="ob-location"
+          placeholder="e.g. Bengaluru, Karnataka"
+          maxlength="80"
+          autocomplete="address-level2"
+          required
+        />
+        <span class="field-hint">Allows location-specific guidance.</span>
+      </div>
+
+      <div class="form-error" id="form-error" hidden></div>
+
+      <button type="submit" class="modal-submit-btn" id="modal-submit-btn">
+        Start Chatting →
+      </button>
+
+    </form>
+
+    <p class="modal-privacy">
+      🔒 Your details are saved only in your browser's local storage — never sent to any server alone.
+    </p>
+
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN APP
+════════════════════════════════════════════════════════════ -->
+<div class="app" id="app" style="display:none;">
 
   <!-- ── Sidebar ──────────────────────────────────────── -->
   <aside class="sidebar">
@@ -17,6 +91,24 @@
       <div class="brand-icon">🏛️</div>
       <span class="brand-name">CivicGuide AI</span>
     </a>
+
+    <div class="sidebar-divider"></div>
+
+    <!-- User Profile Card -->
+    <div class="user-profile-card" id="user-profile-card">
+      <div class="profile-avatar" id="profile-avatar">?</div>
+      <div class="profile-info">
+        <span class="profile-name" id="profile-name">—</span>
+        <span class="profile-meta" id="profile-meta">—</span>
+      </div>
+      <button class="profile-edit-btn" id="profile-edit-btn" title="Edit profile" aria-label="Edit profile">✏️</button>
+    </div>
+
+    <!-- Eligibility Badge -->
+    <div class="eligibility-badge" id="eligibility-badge" hidden>
+      <span id="eligibility-icon">✅</span>
+      <span id="eligibility-text">Eligible to Vote</span>
+    </div>
 
     <div class="sidebar-divider"></div>
 
@@ -78,17 +170,17 @@
       <!-- Welcome State (hidden once chat starts) -->
       <div class="welcome-state" id="welcome-state">
         <div class="welcome-icon">🗳️</div>
-        <h2>How can I help you today?</h2>
-        <p>
+        <h2 id="welcome-heading">How can I help you today?</h2>
+        <p id="welcome-sub">
           Ask me anything about the Indian election process —
           timelines, voter registration, how to vote, counting day, and more.
         </p>
         <div class="suggestion-chips">
+          <button class="chip" data-q="Am I eligible to vote?">Am I eligible to vote?</button>
           <button class="chip" data-q="How do I register as a voter in India?">How do I register as a voter?</button>
           <button class="chip" data-q="Explain the phases of Lok Sabha elections.">Phases of Lok Sabha elections</button>
           <button class="chip" data-q="What documents do I need to vote?">Documents needed to vote</button>
           <button class="chip" data-q="What is NOTA in Indian elections?">What is NOTA?</button>
-          <button class="chip" data-q="What is the minimum voting age in India?">Voting age in India</button>
         </div>
       </div>
 
