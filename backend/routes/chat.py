@@ -1,16 +1,38 @@
-import os
-import google.generativeai as genai
-from flask import Blueprint, request, jsonify
-from dotenv import load_dotenv
+"""
+routes/chat.py — Gemini AI chat endpoint for CivicGuide AI.
 
-load_dotenv()
+Endpoints
+---------
+POST /api/chat
+    Accepts a user message and optional conversation history, user context
+    (name / age / location), and language preference.  Applies decision-based
+    routing before forwarding to Gemini so responses are always relevant.
+
+Design decisions
+----------------
+- The Gemini model is lazily initialised (get_gemini_model) so startup errors
+  are surfaced at request time with a clear 500 message, not at import time.
+- Decision routing (build_decision_prefix) runs BEFORE the Gemini call so the
+  model always has the right framing — no post-processing needed.
+- Language injection is done via a plain-text directive inside the prompt rather
+  than a separate translation API call, keeping latency low.
+- All public helper functions are module-level (not nested) so they are
+  independently testable.
+"""
+
+import google.generativeai as genai
+from flask import Blueprint, request
+
+from config import GEMINI_API_KEY, GEMINI_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES
+from utils  import error_response, success_response
 
 chat_bp = Blueprint("chat", __name__)
 
-# ── Configure Gemini ─────────────────────────────────────
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-SYSTEM_PROMPT = """
+# ── System Prompt ──────────────────────────────────────────────────────────
+# This is injected as the model's system instruction on every call.
+# It defines the assistant's persona, response format, tone, and accuracy rules.
+SYSTEM_PROMPT = """\
 You are CivicGuide AI — a beginner-friendly assistant that helps Indian citizens
 understand elections, civic processes, and voting.
 
@@ -51,16 +73,77 @@ that are relevant to the question):
 - If you are unsure about something, clearly say so rather than guessing
 """
 
-VOTING_AGE = 18
 
+# ── Decision-Routing Patterns ──────────────────────────────────────────────
+# Phrases that indicate the user is asking about the voting procedure itself.
+# Used to gate the response based on the user's eligibility.
+HOW_TO_VOTE_PATTERNS: list[str] = [
+    "how to vote", "how do i vote", "how can i vote",
+    "voting process", "how to cast", "cast my vote",
+    "steps to vote", "voting steps", "voting procedure",
+    "कैसे वोट", "वोट कैसे डालें",
+]
+
+# Filler phrases that alone signal a vague / incomplete question.
+VAGUE_PATTERNS: list[str] = [
+    "tell me", "explain", "what about", "and", "also",
+    "give me info", "more info", "details", "information",
+]
+
+# Messages with fewer words than this threshold AND a vague pattern trigger
+# a clarification request instead of a direct answer.
+VAGUE_WORD_THRESHOLD: int = 6
+
+# Keywords that — even in short messages — indicate a specific enough question
+# that we should NOT ask for clarification.
+SPECIFIC_KEYWORDS: frozenset[str] = frozenset([
+    "register", "eligible", "booth", "id", "aadhaar", "epic",
+    "nota", "evm", "commission", "lok sabha", "rajya sabha", "assembly",
+])
+
+
+# ── Gemini Model Factory ───────────────────────────────────────────────────
+
+def get_gemini_model() -> genai.GenerativeModel:
+    """
+    Initialise and return the Gemini generative model.
+
+    Raises:
+        EnvironmentError: If GEMINI_API_KEY is missing or empty.
+
+    Note:
+        genai.configure() is idempotent — safe to call on every request.
+        Consider caching the model instance at module level if latency matters.
+    """
+    if not GEMINI_API_KEY:
+        raise EnvironmentError(
+            "GEMINI_API_KEY is not set. "
+            "Add it to backend/.env or your environment variables."
+        )
+    genai.configure(api_key=GEMINI_API_KEY)
+    return genai.GenerativeModel(
+        model_name=GEMINI_MODEL,
+        system_instruction=SYSTEM_PROMPT,
+    )
+
+
+# ── Context Builders ───────────────────────────────────────────────────────
 
 def build_context_prefix(user_context: dict) -> str:
     """
-    Build a context string injected before each user message so Gemini
-    can personalise responses based on name, age, and location.
+    Build a plain-text block injected before the user's message so Gemini
+    can personalise responses based on who the user is.
+
+    Args:
+        user_context: Dict with optional keys: name (str), age (int|str),
+                      location (str).
+
+    Returns:
+        Multi-line string to prepend to the augmented prompt, or empty
+        string if user_context is falsy.
     """
     name     = user_context.get("name", "").strip()
-    age      = user_context.get("age")
+    age_raw  = user_context.get("age")
     location = user_context.get("location", "").strip()
 
     lines = ["[USER CONTEXT — use this to personalise your response]"]
@@ -68,24 +151,25 @@ def build_context_prefix(user_context: dict) -> str:
     if name:
         lines.append(f"- User's name: {name}")
 
-    if age is not None:
+    if age_raw is not None:
         try:
-            age_int = int(age)
-            lines.append(f"- User's age: {age_int}")
-            if age_int < VOTING_AGE:
+            age = int(age_raw)
+            lines.append(f"- User's age: {age}")
+            if age < VOTING_AGE:
                 lines.append(
-                    f"- IMPORTANT: This user is {age_int} years old and is NOT yet eligible "
+                    f"- IMPORTANT: This user is {age} years old and NOT yet eligible "
                     f"to vote in India (minimum age is {VOTING_AGE}). "
                     "Acknowledge this kindly, explain when they will be eligible, "
-                    "and suggest how they can prepare (e.g., getting an Aadhaar card, "
-                    "learning about the process, encouraging family members to vote)."
+                    "and suggest preparation steps (e.g., getting an Aadhaar card, "
+                    "learning the process, encouraging family members to vote)."
                 )
             else:
                 lines.append(
-                    f"- This user IS eligible to vote in India. "
+                    "- This user IS eligible to vote in India. "
                     "Guide them through the relevant steps confidently."
                 )
         except (ValueError, TypeError):
+            # Age is not a valid integer — skip the age line silently.
             pass
 
     if location:
@@ -99,114 +183,29 @@ def build_context_prefix(user_context: dict) -> str:
     return "\n".join(lines)
 
 
-def get_gemini_model():
-    """Initialise and return the Gemini generative model."""
-    if not GEMINI_API_KEY:
-        raise EnvironmentError("GEMINI_API_KEY is not set in environment variables.")
-    genai.configure(api_key=GEMINI_API_KEY)
-    return genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=SYSTEM_PROMPT,
-    )
-
-
-@chat_bp.route("/chat", methods=["POST"])
-def chat():
-    """
-    Handle a chat message and return Gemini's response.
-
-    Request JSON:
-    {
-        "message": "...",
-        "history": [...],           (optional) multi-turn history
-        "user_context": {           (optional) personalisation data
-            "name": "...",
-            "age": 20,
-            "location": "..."
-        },
-        "language": "english" | "hindi"   (optional, default "english")
-    }
-
-    Response JSON: { "reply": "...", "model": "gemini-1.5-flash" }
-    """
-    data = request.get_json(silent=True)
-
-    if not data or "message" not in data:
-        return jsonify({"error": "Missing 'message' field in request body"}), 400
-
-    user_message  = data["message"].strip()
-    history       = data.get("history", [])
-    user_context  = data.get("user_context", {})
-    language      = data.get("language", "english").lower().strip()
-
-    if not user_message:
-        return jsonify({"error": "'message' cannot be empty"}), 400
-
-    # ── Decision-based routing ─────────────────────────────
-    # Pre-process the message BEFORE sending to Gemini
-    decision_prefix = build_decision_prefix(user_message, user_context)
-
-    # ── User context prefix ────────────────────────────────
-    context_prefix = build_context_prefix(user_context) if user_context else ""
-
-    # ── Language instruction ───────────────────────────────
-    lang_instruction = build_language_instruction(language)
-
-    # Assemble the augmented message
-    augmented_message = "\n".join(filter(None, [
-        context_prefix,
-        decision_prefix,
-        lang_instruction,
-        f"User question: {user_message}"
-    ]))
-
-    try:
-        model = get_gemini_model()
-
-        # Build a chat session with optional history
-        chat_session = model.start_chat(history=history)
-        response = chat_session.send_message(augmented_message)
-
-        return jsonify({
-            "reply": response.text,
-            "model": "gemini-1.5-flash",
-            "language": language,
-        }), 200
-
-    except EnvironmentError as e:
-        return jsonify({"error": str(e)}), 500
-    except Exception as e:
-        return jsonify({"error": f"Gemini API error: {str(e)}"}), 500
-
-
-# ── Decision-based routing logic ───────────────────────────
-
-HOW_TO_VOTE_PATTERNS = [
-    "how to vote", "how do i vote", "how can i vote",
-    "voting process", "how to cast", "cast my vote",
-    "steps to vote", "voting steps", "voting procedure",
-    "कैसे वोट", "वोट कैसे डालें",
-]
-
-VAGUE_PATTERNS = [
-    "tell me", "explain", "what about", "and", "also",
-    "give me info", "more info", "details", "information",
-]
-
-VAGUE_SHORT_THRESHOLD = 6  # words
-
-
 def build_decision_prefix(message: str, user_context: dict) -> str:
     """
-    Analyse the message and inject conditional instructions for Gemini:
-    - 'how to vote' → check eligibility first, then guide
-    - Vague/short message → prompt for clarification
+    Analyse the user's message and inject conditional instructions for Gemini
+    BEFORE the question is sent.
+
+    Two routing rules:
+    1. "How to vote" gate — if the user is under voting age, redirect them to
+       eligibility guidance instead of the full voting steps.
+    2. Vague question gate — if the message is short and non-specific, ask
+       Gemini to request one clarifying question before answering.
+
+    Args:
+        message:      Raw user message string.
+        user_context: User context dict (may be empty).
+
+    Returns:
+        Instruction string to prepend, or empty string if no routing applies.
     """
-    msg_lower = message.lower()
+    msg_lower    = message.lower()
     instructions = []
 
-    # ─ How-to-vote gate ──────────────────────────────────
-    if any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS):
+    # ── Rule 1: How-to-vote eligibility gate ──────────────────────────────
+    if any(pattern in msg_lower for pattern in HOW_TO_VOTE_PATTERNS):
         age = user_context.get("age") if user_context else None
         try:
             age_int = int(age) if age is not None else None
@@ -215,11 +214,11 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
 
         if age_int is not None and age_int < VOTING_AGE:
             instructions.append(
-                "[DECISION LOGIC] The user asked how to vote but is NOT yet eligible "
+                f"[DECISION LOGIC] The user asked how to vote but is NOT yet eligible "
                 f"(age {age_int}, minimum {VOTING_AGE}). "
                 "First acknowledge they cannot vote yet, explain when they will be eligible, "
                 "and suggest preparatory steps (getting Aadhaar, learning the process, "
-                "encouraging family to vote). Do NOT give full voting steps yet."
+                "encouraging family to vote). Do NOT provide the full voting steps yet."
             )
         else:
             instructions.append(
@@ -227,33 +226,122 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
                 "Provide the full step-by-step voting process in your structured format."
             )
 
-    # ─ Vague question gate ────────────────────────────────
+    # ── Rule 2: Vague question gate ───────────────────────────────────────
     word_count = len(message.split())
-    is_vague = (
-        word_count <= VAGUE_SHORT_THRESHOLD
-        and not any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS)
-        and not any(kw in msg_lower for kw in [
-            "register", "eligible", "booth", "id", "aadhaar", "epic",
-            "nota", "evm", "commission", "lok sabha", "rajya sabha", "assembly"
-        ])
-    )
+    is_short   = word_count <= VAGUE_WORD_THRESHOLD
+    has_specific_keyword = any(kw in msg_lower for kw in SPECIFIC_KEYWORDS)
+    is_how_to_vote_query = any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS)
 
-    if is_vague and any(p in msg_lower for p in VAGUE_PATTERNS):
+    if (
+        is_short
+        and not is_how_to_vote_query
+        and not has_specific_keyword
+        and any(p in msg_lower for p in VAGUE_PATTERNS)
+    ):
         instructions.append(
             "[DECISION LOGIC] The user's question is vague or incomplete. "
             "Ask ONE specific clarifying question to understand what they need "
-            "before giving a full answer. Keep it friendly and short."
+            "before giving a full answer. Keep it friendly and concise."
         )
 
     return "\n".join(instructions)
 
 
 def build_language_instruction(language: str) -> str:
-    """Return a language instruction to inject into the prompt."""
+    """
+    Return a prompt directive that tells Gemini which language to respond in.
+
+    Args:
+        language: Normalised language string ("english" | "hindi").
+
+    Returns:
+        Instruction string, or empty string for the default (English).
+    """
     if language == "hindi":
         return (
             "[LANGUAGE] Respond entirely in Hindi (Devanagari script). "
             "Use simple, everyday Hindi — avoid complex Sanskrit terms. "
             "Keep the same structured format (sections, numbered lists, bullets)."
         )
-    return ""  # Default is English — no extra instruction needed
+    # English is the default — no extra instruction needed.
+    return ""
+
+
+# ── Chat Endpoint ──────────────────────────────────────────────────────────
+
+@chat_bp.route("/chat", methods=["POST"])
+def chat():
+    """
+    Process a chat message and return a Gemini AI response.
+
+    Request JSON:
+    {
+        "message":      "How do I register to vote?",   (required)
+        "history":      [ ... ],                        (optional) prior turns
+        "user_context": {                               (optional) personalisation
+            "name":     "Asha",
+            "age":      22,
+            "location": "Chennai, Tamil Nadu"
+        },
+        "language": "english" | "hindi"                 (optional, default "english")
+    }
+
+    Response JSON (200):
+    {
+        "reply":    "...",
+        "model":    "gemini-1.5-flash",
+        "language": "english"
+    }
+
+    Error JSON (400 / 500):
+    { "error": "..." }
+    """
+    data = request.get_json(silent=True)
+
+    # ── Input validation ───────────────────────────────────────────────────
+    if not data or "message" not in data:
+        return error_response("Missing 'message' field in request body")
+
+    user_message = data["message"].strip()
+    if not user_message:
+        return error_response("'message' cannot be empty")
+
+    # ── Parse optional fields ──────────────────────────────────────────────
+    history      = data.get("history", [])
+    user_context = data.get("user_context") or {}
+    language     = data.get("language", "english").lower().strip()
+
+    # Normalise unsupported language values to the default.
+    if language not in SUPPORTED_LANGUAGES:
+        language = "english"
+
+    # ── Build the augmented prompt ─────────────────────────────────────────
+    # Each builder returns an empty string if not applicable, so filter(None)
+    # removes gaps cleanly before joining.
+    prompt_parts = filter(None, [
+        build_context_prefix(user_context),     # Who the user is
+        build_decision_prefix(user_message, user_context),  # Routing rules
+        build_language_instruction(language),   # Output language
+        f"User question: {user_message}",       # The actual question
+    ])
+    augmented_message = "\n".join(prompt_parts)
+
+    # ── Call Gemini ────────────────────────────────────────────────────────
+    try:
+        model        = get_gemini_model()
+        chat_session = model.start_chat(history=history)
+        response     = chat_session.send_message(augmented_message)
+
+        return success_response({
+            "reply":    response.text,
+            "model":    GEMINI_MODEL,
+            "language": language,
+        })
+
+    except EnvironmentError as exc:
+        # Missing API key — configuration error, not a transient failure.
+        return error_response(str(exc), status=500)
+
+    except Exception as exc:  # noqa: BLE001
+        # Gemini API errors: quota exceeded, network issues, etc.
+        return error_response(f"Gemini API error: {exc}", status=500)

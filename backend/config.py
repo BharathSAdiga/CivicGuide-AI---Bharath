@@ -1,0 +1,45 @@
+"""
+config.py — CivicGuide AI centralized configuration.
+
+All environment variables and app-wide constants are sourced here.
+Import from this module rather than reading os.getenv() scattered across routes.
+"""
+
+import os
+from dotenv import load_dotenv
+
+# Load .env file (no-op in production if env vars are already set)
+load_dotenv()
+
+
+# ── Gemini AI ─────────────────────────────────────────────────────────────
+GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL:   str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+
+# ── Server ────────────────────────────────────────────────────────────────
+FLASK_HOST:  str = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_PORT:  int = int(os.getenv("FLASK_PORT", "5000"))
+FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "1") == "1"
+
+# ── CORS ──────────────────────────────────────────────────────────────────
+# Comma-separated origins; defaults cover local dev (Live Server + React dev)
+_CORS_RAW: str = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:5500,http://localhost:5500"
+)
+CORS_ORIGINS: list[str] = [o.strip() for o in _CORS_RAW.split(",") if o.strip()]
+
+# ── Business Logic ────────────────────────────────────────────────────────
+VOTING_AGE: int = 18                  # Minimum age to vote in India
+BOOTH_LIMIT_MAX: int = 5              # Hard cap on nearest-booths responses
+BOOTH_LIMIT_DEFAULT: int = 3          # Default number of nearest booths returned
+
+# ── Supported Languages ───────────────────────────────────────────────────
+SUPPORTED_LANGUAGES: set[str] = {"english", "hindi"}
+DEFAULT_LANGUAGE: str = "english"
+
+# ── Supported Election Types ──────────────────────────────────────────────
+SUPPORTED_ELECTION_TYPES: set[str] = {
+    "lok_sabha", "state_assembly", "rajya_sabha", "local_body"
+}
+DEFAULT_ELECTION_TYPE: str = "lok_sabha"
