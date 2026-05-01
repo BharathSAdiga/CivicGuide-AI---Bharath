@@ -8,6 +8,7 @@ const VOTING_AGE    = 18;
 let conversationHistory = [];
 let isLoading           = false;
 let userContext         = null;   // { name, age, location }
+let currentLanguage     = "english";  // "english" | "hindi"
 
 // ─── DOM References ───────────────────────────────────────
 const appEl          = document.getElementById("app");
@@ -33,6 +34,18 @@ const profileEditBtn = document.getElementById("profile-edit-btn");
 const eligBadge      = document.getElementById("eligibility-badge");
 const eligIcon       = document.getElementById("eligibility-icon");
 const eligText       = document.getElementById("eligibility-text");
+
+// Language toggle
+document.querySelectorAll(".lang-btn").forEach(btn => {
+  btn.addEventListener("click", () => {
+    currentLanguage = btn.dataset.lang;
+    document.querySelectorAll(".lang-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    // Update input placeholder
+    if (inputEl) inputEl.placeholder =
+      currentLanguage === "hindi" ? "चुनाव प्रक्रिया के बारे में पूछें…" : "Ask about the election process...";
+  });
+});
 
 // ══════════════════════════════════════════════════════════
 // ONBOARDING
@@ -314,7 +327,8 @@ async function handleSend() {
       body: JSON.stringify({
         message,
         history: conversationHistory.slice(0, -1),
-        user_context: userContext || {}      // ← inject context every call
+        user_context: userContext || {},      // ← inject context every call
+        language: currentLanguage             // ← EN or HI
       })
     });
 

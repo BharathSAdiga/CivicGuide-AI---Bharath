@@ -219,6 +219,35 @@ html, body {
   50%      { opacity:0.5; transform:scale(1.4); }
 }
 
+/* Language toggle */
+.lang-toggle {
+  display: flex;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.lang-btn {
+  padding: 0.25rem 0.75rem;
+  border: none;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  color: var(--text-muted);
+  background: transparent;
+  transition: var(--transition);
+}
+
+.lang-btn.active {
+  background: var(--gradient);
+  color: white;
+}
+
+
 /* Messages Area */
 .chat-messages {
   flex: 1;

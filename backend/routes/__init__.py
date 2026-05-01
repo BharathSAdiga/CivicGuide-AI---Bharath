@@ -3,6 +3,7 @@ from .civic import civic_bp
 from .chat import chat_bp
 from .eligibility import eligibility_bp
 from .timeline import timeline_bp
+from .booths import booths_bp
 
 
 def register_routes(app):
@@ -12,3 +13,4 @@ def register_routes(app):
     app.register_blueprint(chat_bp, url_prefix="/api")
     app.register_blueprint(eligibility_bp, url_prefix="/api")
     app.register_blueprint(timeline_bp, url_prefix="/api")
+    app.register_blueprint(booths_bp, url_prefix="/api")

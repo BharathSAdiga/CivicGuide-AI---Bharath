@@ -123,7 +123,8 @@ def chat():
             "name": "...",
             "age": 20,
             "location": "..."
-        }
+        },
+        "language": "english" | "hindi"   (optional, default "english")
     }
 
     Response JSON: { "reply": "...", "model": "gemini-1.5-flash" }
@@ -136,16 +137,28 @@ def chat():
     user_message  = data["message"].strip()
     history       = data.get("history", [])
     user_context  = data.get("user_context", {})
+    language      = data.get("language", "english").lower().strip()
 
     if not user_message:
         return jsonify({"error": "'message' cannot be empty"}), 400
 
-    # Inject user context as a prefix so Gemini personalises the reply
-    if user_context:
-        context_prefix = build_context_prefix(user_context)
-        augmented_message = f"{context_prefix}\nUser question: {user_message}"
-    else:
-        augmented_message = user_message
+    # ── Decision-based routing ─────────────────────────────
+    # Pre-process the message BEFORE sending to Gemini
+    decision_prefix = build_decision_prefix(user_message, user_context)
+
+    # ── User context prefix ────────────────────────────────
+    context_prefix = build_context_prefix(user_context) if user_context else ""
+
+    # ── Language instruction ───────────────────────────────
+    lang_instruction = build_language_instruction(language)
+
+    # Assemble the augmented message
+    augmented_message = "\n".join(filter(None, [
+        context_prefix,
+        decision_prefix,
+        lang_instruction,
+        f"User question: {user_message}"
+    ]))
 
     try:
         model = get_gemini_model()
@@ -156,10 +169,91 @@ def chat():
 
         return jsonify({
             "reply": response.text,
-            "model": "gemini-1.5-flash"
+            "model": "gemini-1.5-flash",
+            "language": language,
         }), 200
 
     except EnvironmentError as e:
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         return jsonify({"error": f"Gemini API error: {str(e)}"}), 500
+
+
+# ── Decision-based routing logic ───────────────────────────
+
+HOW_TO_VOTE_PATTERNS = [
+    "how to vote", "how do i vote", "how can i vote",
+    "voting process", "how to cast", "cast my vote",
+    "steps to vote", "voting steps", "voting procedure",
+    "कैसे वोट", "वोट कैसे डालें",
+]
+
+VAGUE_PATTERNS = [
+    "tell me", "explain", "what about", "and", "also",
+    "give me info", "more info", "details", "information",
+]
+
+VAGUE_SHORT_THRESHOLD = 6  # words
+
+
+def build_decision_prefix(message: str, user_context: dict) -> str:
+    """
+    Analyse the message and inject conditional instructions for Gemini:
+    - 'how to vote' → check eligibility first, then guide
+    - Vague/short message → prompt for clarification
+    """
+    msg_lower = message.lower()
+    instructions = []
+
+    # ─ How-to-vote gate ──────────────────────────────────
+    if any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS):
+        age = user_context.get("age") if user_context else None
+        try:
+            age_int = int(age) if age is not None else None
+        except (ValueError, TypeError):
+            age_int = None
+
+        if age_int is not None and age_int < VOTING_AGE:
+            instructions.append(
+                "[DECISION LOGIC] The user asked how to vote but is NOT yet eligible "
+                f"(age {age_int}, minimum {VOTING_AGE}). "
+                "First acknowledge they cannot vote yet, explain when they will be eligible, "
+                "and suggest preparatory steps (getting Aadhaar, learning the process, "
+                "encouraging family to vote). Do NOT give full voting steps yet."
+            )
+        else:
+            instructions.append(
+                "[DECISION LOGIC] The user asked how to vote and appears eligible. "
+                "Provide the full step-by-step voting process in your structured format."
+            )
+
+    # ─ Vague question gate ────────────────────────────────
+    word_count = len(message.split())
+    is_vague = (
+        word_count <= VAGUE_SHORT_THRESHOLD
+        and not any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS)
+        and not any(kw in msg_lower for kw in [
+            "register", "eligible", "booth", "id", "aadhaar", "epic",
+            "nota", "evm", "commission", "lok sabha", "rajya sabha", "assembly"
+        ])
+    )
+
+    if is_vague and any(p in msg_lower for p in VAGUE_PATTERNS):
+        instructions.append(
+            "[DECISION LOGIC] The user's question is vague or incomplete. "
+            "Ask ONE specific clarifying question to understand what they need "
+            "before giving a full answer. Keep it friendly and short."
+        )
+
+    return "\n".join(instructions)
+
+
+def build_language_instruction(language: str) -> str:
+    """Return a language instruction to inject into the prompt."""
+    if language == "hindi":
+        return (
+            "[LANGUAGE] Respond entirely in Hindi (Devanagari script). "
+            "Use simple, everyday Hindi — avoid complex Sanskrit terms. "
+            "Keep the same structured format (sections, numbered lists, bullets)."
+        )
+    return ""  # Default is English — no extra instruction needed

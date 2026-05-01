@@ -158,9 +158,16 @@
         <h1>Election Process Assistant</h1>
         <p>Powered by Google Gemini · India Civic AI</p>
       </div>
-      <div class="header-status">
-        <span class="status-dot"></span>
-        Online
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <!-- Language Toggle -->
+        <div class="lang-toggle" id="lang-toggle" role="group" aria-label="Response language">
+          <button class="lang-btn active" data-lang="english" id="lang-en">EN</button>
+          <button class="lang-btn" data-lang="hindi" id="lang-hi">हि</button>
+        </div>
+        <div class="header-status">
+          <span class="status-dot"></span>
+          Online
+        </div>
       </div>
     </header>
 

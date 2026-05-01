@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CivicGuide AI — Find your nearest polling booth on a map." />
+  <title>Find Polling Booth — CivicGuide AI</title>
+  <link rel="stylesheet" href="css/booths.css" />
+</head>
+<body>
+
+  <nav class="navbar">
+    <a href="index.html" class="navbar-brand">
+      <div class="brand-icon">🏛️</div>
+      <span class="brand-name">CivicGuide AI</span>
+    </a>
+    <ul class="navbar-links">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="eligibility.html">Eligibility</a></li>
+      <li><a href="timeline.html">Timeline</a></li>
+      <li><a href="booths.html" class="active">Find Booth</a></li>
+      <li><a href="chat.html">Assistant</a></li>
+    </ul>
+  </nav>
+
+  <header class="page-header">
+    <div class="page-tag"><span class="tag-dot"></span> Google Maps</div>
+    <h1 class="page-title">Find Your <span class="gradient-text">Polling Booth</span></h1>
+    <p class="page-subtitle">Enter your location or use GPS to find the nearest polling booths on the map.</p>
+  </header>
+
+  <div class="api-warning">
+    <div class="warning-box">
+      ⚠️ &nbsp;Replace <code>YOUR_GOOGLE_MAPS_API_KEY</code> in this file with your actual
+      <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" target="_blank" style="color:#fcd34d;">Google Maps API key</a>.
+      Enable <strong>Maps JavaScript API</strong> and <strong>Geocoding API</strong> in your Google Cloud Console.
+      Booth data is sample/mock data for demonstration.
+    </div>
+  </div>
+
+  <div class="main-layout">
+
+    <!-- ── Search Panel ──────────────────────────────── -->
+    <aside class="search-panel">
+
+      <div class="panel-card">
+        <h2>📍 Search Location</h2>
+
+        <div class="search-input-wrap">
+          <span class="search-icon">🔍</span>
+          <input
+            type="text"
+            id="location-input"
+            placeholder="Enter area, city (e.g. Koramangala, Bengaluru)"
+            autocomplete="off"
+            aria-label="Location search"
+          />
+        </div>
+
+        <button class="locate-btn" id="locate-btn" aria-label="Use my current location">
+          📡 Use My Current Location
+        </button>
+
+        <button class="search-btn" id="search-btn" aria-label="Find nearest booths">
+          Find Nearest Booths →
+        </button>
+      </div>
+
+      <!-- Results -->
+      <div class="panel-card">
+        <h2>🗳️ Nearest Booths</h2>
+        <div class="results-list" id="results-list">
+          <div class="empty-results">
+            <span class="empty-icon">🗺️</span>
+            Search a location to see nearby polling booths.
+          </div>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- ── Map Panel ─────────────────────────────────── -->
+    <div class="map-panel">
+      <div id="map-placeholder" class="map-placeholder">
+        <span class="map-icon">🗺️</span>
+        <h3>Map will appear here</h3>
+        <p>Search a location to load the map with nearby polling booth markers.</p>
+      </div>
+      <div id="map" style="display:none;"></div>
+    </div>
+
+  </div>
+
+  <!--
+    Replace YOUR_GOOGLE_MAPS_API_KEY below with your real API key.
+    Required APIs: Maps JavaScript API, Geocoding API
+  -->
+  <script>
+    window.GMAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
+  </script>
+  <script src="js/booths.js"></script>
+  <script
+    src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"
+    async defer
+    onerror="window.mapsLoadError = true"
+  ></script>
+</body>
+</html>
