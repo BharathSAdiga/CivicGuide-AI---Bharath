@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="CivicGuide AI — Ask anything about the Indian election process." />
+  <title>CivicGuide AI — Election Assistant</title>
+  <link rel="stylesheet" href="css/chat.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ── Sidebar ──────────────────────────────────────── -->
+  <aside class="sidebar">
+    <a href="index.html" class="sidebar-brand">
+      <div class="brand-icon">🏛️</div>
+      <span class="brand-name">CivicGuide AI</span>
+    </a>
+
+    <div class="sidebar-divider"></div>
+
+    <button class="new-chat-btn" id="new-chat-btn">
+      <span>✏️</span> New Conversation
+    </button>
+
+    <span class="sidebar-section-label">Quick Topics</span>
+
+    <div class="quick-topics">
+      <button class="topic-btn" data-q="What is the election process in India?">
+        <span class="topic-icon">🗳️</span> Election Process
+      </button>
+      <button class="topic-btn" data-q="What are the important election timelines and dates?">
+        <span class="topic-icon">📅</span> Election Timelines
+      </button>
+      <button class="topic-btn" data-q="How do I register to vote in India?">
+        <span class="topic-icon">📋</span> Voter Registration
+      </button>
+      <button class="topic-btn" data-q="What is the role of the Election Commission of India?">
+        <span class="topic-icon">🏛️</span> Election Commission
+      </button>
+      <button class="topic-btn" data-q="How does the Model Code of Conduct work?">
+        <span class="topic-icon">📜</span> Model Code of Conduct
+      </button>
+      <button class="topic-btn" data-q="What are the different types of elections in India?">
+        <span class="topic-icon">🇮🇳</span> Types of Elections
+      </button>
+      <button class="topic-btn" data-q="How does vote counting work in India?">
+        <span class="topic-icon">🔢</span> Vote Counting
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="sidebar-divider"></div>
+      <a href="index.html">🏠 Home</a>
+      <a href="/api/status" target="_blank">⚡ API Status</a>
+    </div>
+  </aside>
+
+  <!-- ── Main Chat ─────────────────────────────────────── -->
+  <main class="chat-main">
+
+    <!-- Header -->
+    <header class="chat-header">
+      <div class="chat-header-info">
+        <h1>Election Process Assistant</h1>
+        <p>Powered by Google Gemini · India Civic AI</p>
+      </div>
+      <div class="header-status">
+        <span class="status-dot"></span>
+        Online
+      </div>
+    </header>
+
+    <!-- Messages -->
+    <div class="chat-messages" id="chat-messages">
+
+      <!-- Welcome State (hidden once chat starts) -->
+      <div class="welcome-state" id="welcome-state">
+        <div class="welcome-icon">🗳️</div>
+        <h2>How can I help you today?</h2>
+        <p>
+          Ask me anything about the Indian election process —
+          timelines, voter registration, how to vote, counting day, and more.
+        </p>
+        <div class="suggestion-chips">
+          <button class="chip" data-q="How do I register as a voter in India?">How do I register as a voter?</button>
+          <button class="chip" data-q="Explain the phases of Lok Sabha elections.">Phases of Lok Sabha elections</button>
+          <button class="chip" data-q="What documents do I need to vote?">Documents needed to vote</button>
+          <button class="chip" data-q="What is NOTA in Indian elections?">What is NOTA?</button>
+          <button class="chip" data-q="What is the minimum voting age in India?">Voting age in India</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Input -->
+    <div class="chat-input-area">
+      <div class="input-wrapper">
+        <textarea
+          id="user-input"
+          placeholder="Ask about the election process..."
+          rows="1"
+          aria-label="Chat input"
+        ></textarea>
+        <button class="send-btn" id="send-btn" aria-label="Send message" disabled>
+          <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+      <p class="input-hint">Press <kbd>Enter</kbd> to send · <kbd>Shift+Enter</kbd> for new line</p>
+    </div>
+
+  </main>
+</div>
+
+<script src="js/chat.js"></script>
+</body>
+</html>
