@@ -1,0 +1,29 @@
+Voter Eligibility: To be eligible to vote in India, a person must be an Indian citizen, be at least 18 years of age on the qualifying date (typically January 1st of the year of the electoral roll revision), and be a resident of the polling area where they are enrolling. Persons of unsound mind or those disqualified due to corrupt practices or offenses relating to elections are not eligible to vote.
+
+Voter Registration (Form 6): First-time voters or those shifting to a new constituency must fill out Form 6 to register their name in the electoral roll. Form 6 can be submitted online via the National Voters' Service Portal (NVSP) or the Voter Helpline App, or offline by submitting a physical copy to the local Electoral Registration Officer (ERO) or Booth Level Officer (BLO).
+
+Documents Required for Registration: When submitting Form 6, applicants must provide proof of age (e.g., Birth Certificate, 10th standard mark sheet, PAN card, Aadhaar card, or Indian Passport) and proof of address (e.g., utility bills, Aadhaar card, Passport, or bank passbook). A recent passport-size photograph is also required.
+
+Voter ID Card (EPIC): After successful registration, voters are issued an Electors Photo Identity Card (EPIC), commonly known as the Voter ID card. It serves as primary identification on voting day. However, even if someone does not have their EPIC on voting day, they can still vote if their name is on the electoral roll, provided they show another approved photo ID (like Aadhaar, PAN card, Passport, or Driving License).
+
+Checking Name in the Voter List: Having a Voter ID does not guarantee the right to vote; the voter's name must also appear in the current electoral roll (voter list). Voters can check their name online at the NVSP portal (electoralsearch.in) by searching with their EPIC number or by entering their personal details.
+
+Types of Elections in India: The main types of elections are Lok Sabha (General Elections for the lower house of Parliament), Rajya Sabha (Upper house of Parliament, elected indirectly by state legislators), State Assembly (Vidhan Sabha elections for state governments), and Local Body elections (Panchayats and Municipalities).
+
+Lok Sabha Elections: Lok Sabha elections are held every five years to elect 543 Members of Parliament. The party or coalition with a majority (at least 272 seats) forms the central government and selects the Prime Minister. These elections are often conducted in multiple phases across the country due to its large size and population.
+
+State Assembly Elections: State Assembly (Vidhan Sabha) elections are held every five years in each state to elect Members of the Legislative Assembly (MLAs). The majority party forms the state government and selects the Chief Minister.
+
+Electronic Voting Machines (EVM) and VVPAT: India uses Electronic Voting Machines (EVMs) for casting votes. When a voter presses the button next to their chosen candidate, a red light glows and a beep is heard. A Voter Verifiable Paper Audit Trail (VVPAT) machine is attached to the EVM, which prints a slip with the candidate's name and symbol that is visible through a glass window for 7 seconds before falling into a sealed drop box, allowing the voter to verify their vote.
+
+NOTA (None of the Above): If a voter does not wish to vote for any of the candidates listed on the EVM, they can press the NOTA button. The NOTA option allows voters to express their dissatisfaction with all candidates without their vote being invalid. However, even if NOTA gets the highest number of votes, the candidate with the second-highest votes is declared the winner.
+
+Polling Booth Process: On election day, the process at the polling booth involves three polling officers. Officer 1 checks the voter's name in the electoral roll and verifies their ID. Officer 2 marks the voter's left forefinger with indelible ink, asks them to sign the register, and issues a voter slip. Officer 3 takes the slip and enables the EVM. The voter then proceeds to the voting compartment to press the button on the EVM.
+
+NRI (Non-Resident Indian) Voting: Indian citizens living abroad (NRIs) who have not acquired citizenship of any other country are eligible to vote. They must register using Form 6A. Currently, NRIs are not permitted to vote online or by postal ballot; they must be physically present at their designated polling booth in India on the day of voting.
+
+Service Voters and Postal Ballots: Members of the armed forces, paramilitary forces, and government employees posted outside their home state are considered Service Voters. They have the option to vote via postal ballot or through a proxy voter. Election duty staff and certain categories of essential service workers can also use postal ballots.
+
+Election Commission of India (ECI): The Election Commission of India is the autonomous constitutional authority responsible for administering election processes in India at the national and state levels. The ECI ensures free and fair elections, enforces the Model Code of Conduct, and oversees the registration of political parties.
+
+Model Code of Conduct (MCC): The Model Code of Conduct is a set of guidelines issued by the ECI for political parties and candidates during elections. It comes into effect immediately after the election dates are announced and remains until the results are declared. It regulates speeches, polling day, polling booths, portfolios, election manifestos, processions, and general conduct.

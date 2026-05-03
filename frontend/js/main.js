@@ -77,9 +77,10 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ─── API Status Ping ──────────────────────────────────
+  const API_BASE = window.CIVICGUIDE_API_BASE || 'http://127.0.0.1:5000';
   async function checkAPIStatus() {
     try {
-      const res = await fetch('/api/status');
+      const res = await fetch(`${API_BASE}/api/status`);
       if (!res.ok) throw new Error('Non-200');
       const data = await res.json();
       console.log('[CivicGuide AI] API Status:', data);

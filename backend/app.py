@@ -14,6 +14,8 @@ from flask_cors import CORS
 
 from config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, CORS_ORIGINS
 from routes import register_routes
+from rag import load_knowledge_base
+
 
 
 def create_app() -> Flask:
@@ -31,6 +33,10 @@ def create_app() -> Flask:
 
     # ── Routes ────────────────────────────────────────────────────────────
     register_routes(app)
+
+    # ── Knowledge Base ────────────────────────────────────────────────────
+    # Pre-load the RAG knowledge base on startup so the first request is fast
+    load_knowledge_base()
 
     # ── Global Error Handlers ──────────────────────────────────────────────
     # These ensure every error — even unhandled ones — returns JSON so the

@@ -25,13 +25,14 @@ Design decisions
 
 from google import genai
 from google.genai import types
-from flask import Blueprint, request
+from flask import Blueprint, request, Response, stream_with_context
 
 from config import (
     GEMINI_API_KEY, GEMINI_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES,
     CHAT_MAX_MESSAGE_LENGTH, CHAT_MAX_HISTORY_TURNS,
 )
 from utils import error_response, success_response
+from rag import retrieve
 
 chat_bp = Blueprint("chat", __name__)
 
@@ -323,11 +324,20 @@ def chat():
     if language not in SUPPORTED_LANGUAGES:
         language = "english"
 
+    # ── Retrieve knowledge base context (RAG) ──────────────────────────────
+    retrieved_context = retrieve(user_message)
+    knowledge_prefix = (
+        f"[OFFICIAL KNOWLEDGE BASE]\n{retrieved_context}\n[END KNOWLEDGE BASE]\n"
+        "Use the official knowledge base above to answer the user's question accurately. "
+        "Do not invent facts outside of this knowledge base if the answer is contained within it."
+    ) if retrieved_context else ""
+
     # ── Build the augmented prompt ─────────────────────────────────────────
     prompt_parts = filter(None, [
         build_context_prefix(user_context),
         build_decision_prefix(user_message, user_context),
         build_language_instruction(language),
+        knowledge_prefix,
         f"User question: {user_message}",
     ])
     augmented_message = "\n".join(prompt_parts)
@@ -344,13 +354,17 @@ def chat():
             ),
             history=history_to_contents(history),
         )
-        response = session.send_message(augmented_message)
+        response_stream = session.send_message_stream(augmented_message)
 
-        return success_response({
-            "reply":    response.text,
-            "model":    GEMINI_MODEL,
-            "language": language,
-        })
+        def generate():
+            try:
+                for chunk in response_stream:
+                    if chunk.text:
+                        yield chunk.text
+            except Exception as e:
+                yield f"\\n\\n[Error: {str(e)}]"
+        
+        return Response(stream_with_context(generate()), mimetype='text/plain')
 
     except EnvironmentError as exc:
         return error_response(str(exc), status=500)

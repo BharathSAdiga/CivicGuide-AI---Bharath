@@ -10,7 +10,7 @@
  *  - Graceful error messages in the chat bubble + toast
  */
 
-import { apiPost, escapeHtml, formatTime, pingBackend } from "./api.js";
+import { apiPost, apiStreamPost, escapeHtml, formatTime, pingBackend } from "./api.js";
 import { showToast } from "./toast.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ const welcomeSub     = document.getElementById("welcome-sub");
 const inputEl        = document.getElementById("user-input");
 const sendBtn        = document.getElementById("send-btn");
 const newChatBtn     = document.getElementById("new-chat-btn");
+const boothFinderBtn = document.getElementById("booth-finder-btn");
 
 const profileAvatar  = document.getElementById("profile-avatar");
 const profileName    = document.getElementById("profile-name");
@@ -398,6 +399,108 @@ newChatBtn.addEventListener("click", () => {
 
 
 // ══════════════════════════════════════════════════════════════════════════
+// BOOTH FINDER — GOOGLE MAPS INTEGRATION
+// ══════════════════════════════════════════════════════════════════════════
+
+/** Keywords that indicate the AI response is about polling booths/stations. */
+const BOOTH_KEYWORDS = [
+  "polling booth", "polling station", "voting booth", "voting centre",
+  "voting center", "nearest booth", "find your booth", "booths near",
+  "polling place", "where to vote", "locate booth", "booth finder",
+  "voterportal", "polling day",
+];
+
+/**
+ * Open Google Maps searching for polling stations near the given coordinates.
+ * @param {number} lat
+ * @param {number} lng
+ */
+function openMapsWithBooths(lat, lng) {
+  const url = `https://www.google.com/maps/search/polling+stations+near+me/@${lat},${lng},14z`;
+  window.open(url, "_blank", "noopener");
+}
+
+/**
+ * Build the HTML for an inline maps link card that sits inside an AI bubble.
+ * @returns {string} HTML string.
+ */
+function buildMapsLinkHTML() {
+  return `
+    <a class="maps-link-card" href="#" onclick="window._openBoothMaps(); return false;">
+      <div class="maps-link-icon">🗺️</div>
+      <div class="maps-link-body">
+        <strong>View Nearby Polling Booths</strong>
+        <span>Opens Google Maps with polling stations near you</span>
+      </div>
+      <span class="maps-link-arrow">→</span>
+    </a>`;
+}
+
+/**
+ * Check if the AI response mentions polling booths, and if so,
+ * append a clickable Google Maps link card to the AI bubble.
+ *
+ * @param {string}      aiText     - The full AI response text.
+ * @param {HTMLElement} msgWrapper - The .message wrapper element.
+ */
+function maybeInjectBoothLink(aiText, msgWrapper) {
+  const lower = aiText.toLowerCase();
+  const isBooth = BOOTH_KEYWORDS.some((kw) => lower.includes(kw));
+  if (!isBooth) return;
+
+  const bubble = msgWrapper.querySelector(".bubble");
+  if (!bubble) return;
+
+  // Don't inject if there's already one in this bubble
+  if (bubble.querySelector(".maps-link-card")) return;
+
+  const linkEl = document.createElement("div");
+  linkEl.innerHTML = buildMapsLinkHTML();
+  bubble.appendChild(linkEl.firstElementChild);
+}
+
+/**
+ * Global handler exposed for the inline maps link card's onclick.
+ * Uses Geolocation → opens Google Maps. Falls back to user's
+ * onboarding location as a text-based search.
+ */
+window._openBoothMaps = function () {
+  if (!navigator.geolocation) {
+    // Fallback: use user's stored location string
+    const loc = userContext?.location || "India";
+    window.open(
+      `https://www.google.com/maps/search/polling+stations+near+${encodeURIComponent(loc)}`,
+      "_blank", "noopener"
+    );
+    return;
+  }
+
+  showToast("Getting your location…", "info", 3000);
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => openMapsWithBooths(pos.coords.latitude, pos.coords.longitude),
+    () => {
+      // Fallback on denied/error
+      const loc = userContext?.location || "India";
+      window.open(
+        `https://www.google.com/maps/search/polling+stations+near+${encodeURIComponent(loc)}`,
+        "_blank", "noopener"
+      );
+      showToast("Location unavailable — searching near your registered area.", "warning", 4000);
+    },
+    { timeout: 8000, enableHighAccuracy: false }
+  );
+};
+
+// Welcome state booth finder button
+if (boothFinderBtn) {
+  boothFinderBtn.addEventListener("click", () => {
+    window._openBoothMaps();
+  });
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
 // MAIN SEND HANDLER
 // ══════════════════════════════════════════════════════════════════════════
 
@@ -429,18 +532,32 @@ async function handleSend() {
   showTyping();
 
   try {
-    const data = await apiPost("/api/chat", {
+    hideTyping();
+    const msgWrapper = appendMessage("ai", "...");
+    const bubbleP = msgWrapper.querySelector(".bubble p");
+    
+    let fullReply = "";
+    
+    await apiStreamPost("/api/chat", {
       message,
       history:      conversationHistory.slice(0, -1),
       user_context: userContext || {},
       language:     currentLanguage,
+    }, (chunk) => {
+      fullReply += chunk;
+      bubbleP.innerHTML = renderMarkdown(fullReply);
+      messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
     });
 
-    hideTyping();
+    if (!fullReply) {
+       fullReply = "I couldn't generate a response. Please try again.";
+       bubbleP.innerHTML = renderMarkdown(fullReply);
+    }
+    
+    conversationHistory.push({ role: "model", parts: [fullReply] });
 
-    const reply = data.reply || "I couldn't generate a response. Please try again.";
-    appendMessage("ai", renderMarkdown(reply));
-    conversationHistory.push({ role: "model", parts: [reply] });
+    // If the response mentions booths/polling, inject a maps link card
+    maybeInjectBoothLink(fullReply, msgWrapper);
 
   } catch (err) {
     hideTyping();

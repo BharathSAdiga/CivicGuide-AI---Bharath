@@ -166,6 +166,50 @@ export async function apiPost(path, body) {
 }
 
 /**
+ * POST JSON data and read stream response.
+ *
+ * @param {string} path - API path, e.g. "/api/chat"
+ * @param {object} body - JSON body
+ * @param {Function} onChunk - Callback for each chunk of text
+ */
+export async function apiStreamPost(path, body, onChunk) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS * 4); // longer timeout for streaming
+
+  try {
+    const response = await fetch(`${API_BASE}${path}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const json = await response.json().catch(() => ({}));
+      const message = json.error || `Server error ${response.status}`;
+      const err = new Error(message);
+      err.status = response.status;
+      throw err;
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder("utf-8");
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      onChunk(chunk);
+    }
+  } catch (err) {
+    err.message = classifyError(err, err.status);
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * GET data from a backend endpoint.
  *
  * @param {string} path - API path, e.g. "/api/timeline?type=lok_sabha"
