@@ -1,6 +1,6 @@
 Voter Eligibility: To be eligible to vote in India, a person must be an Indian citizen, be at least 18 years of age on the qualifying date (typically January 1st of the year of the electoral roll revision), and be a resident of the polling area where they are enrolling. Persons of unsound mind or those disqualified due to corrupt practices or offenses relating to elections are not eligible to vote.
 
-Voter Registration (Form 6): First-time voters or those shifting to a new constituency must fill out Form 6 to register their name in the electoral roll. Form 6 can be submitted online via the National Voters' Service Portal (NVSP) at voters.eci.gov.in or the Voter Helpline App, or offline by submitting a physical copy to the local Electoral Registration Officer (ERO) or Booth Level Officer (BLO).
+Voter Registration (Form 6): First-time voters or those shifting to a new constituency must fill out Form 6 to register their name in the electoral roll. Form 6 can be submitted online via the National Voters' Service Portal (NVSP) or the Voter Helpline App, or offline by submitting a physical copy to the local Electoral Registration Officer (ERO) or Booth Level Officer (BLO).
 
 Documents Required for Registration: When submitting Form 6, applicants must provide proof of age (e.g., Birth Certificate, 10th standard mark sheet, PAN card, Aadhaar card, or Indian Passport) and proof of address (e.g., utility bills, Aadhaar card, Passport, or bank passbook). A recent passport-size photograph is also required.
 
@@ -24,40 +24,6 @@ NRI (Non-Resident Indian) Voting: Indian citizens living abroad (NRIs) who have 
 
 Service Voters and Postal Ballots: Members of the armed forces, paramilitary forces, and government employees posted outside their home state are considered Service Voters. They have the option to vote via postal ballot or through a proxy voter. Election duty staff and certain categories of essential service workers can also use postal ballots.
 
-Election Commission of India (ECI): The Election Commission of India is the autonomous constitutional authority responsible for administering election processes in India at the national and state levels. The ECI ensures free and fair elections, enforces the Model Code of Conduct, and oversees the registration of political parties. The ECI can be contacted via the Voter Helpline number 1950.
+Election Commission of India (ECI): The Election Commission of India is the autonomous constitutional authority responsible for administering election processes in India at the national and state levels. The ECI ensures free and fair elections, enforces the Model Code of Conduct, and oversees the registration of political parties.
 
 Model Code of Conduct (MCC): The Model Code of Conduct is a set of guidelines issued by the ECI for political parties and candidates during elections. It comes into effect immediately after the election dates are announced and remains until the results are declared. It regulates speeches, polling day, polling booths, portfolios, election manifestos, processions, and general conduct.
-
-Voter Helpline 1950: Citizens can call the toll-free Voter Helpline number 1950 for assistance with voter registration, finding polling booth location, checking their name in the electoral roll, and reporting Model Code of Conduct violations. The helpline is available in multiple regional languages and operates during election season.
-
-Aadhaar-Voter ID Linking: The Election Commission of India has initiated a voluntary program to link Aadhaar numbers with Voter ID (EPIC) cards to eliminate duplicate entries and ensure one person, one vote. Voters can link their Aadhaar and Voter ID on the NVSP portal or via the Voter Helpline App. Refusal to link does not result in deletion of the voter's name from the electoral roll.
-
-Updating Voter Details (Form 8): Voters who need to update their address within the same constituency, correct their name, or make other changes to their voter card details must submit Form 8 to the Electoral Registration Officer. Form 8 can be submitted online on the NVSP portal or the Voter Helpline App.
-
-Transferring Voter Registration (Form 6): When a voter moves to a new constituency (within or across states), they must register afresh in their new location using Form 6. Simultaneously, they must apply to delete their name from the old constituency using Form 7. Without transfer, a voter can only vote in the constituency where they are registered.
-
-Objecting to Incorrect Registration (Form 7): Any citizen can raise an objection against the inclusion of a person's name in the electoral roll if they believe the entry is incorrect or fraudulent, using Form 7. This is submitted to the Electoral Registration Officer.
-
-Election Phases and Schedule: Lok Sabha elections are often held in multiple phases (sometimes 7 or more) across different states on different dates. The Election Commission announces the complete schedule including notification dates, last dates for filing nominations, scrutiny dates, withdrawal of candidacy, polling dates, and counting dates. The entire process typically spans 4–6 weeks.
-
-Vote Counting Process: After polls close, all EVMs are sealed and transported to strong rooms under security. On counting day (typically 2–3 days after the last polling phase), postal ballots are counted first, followed by EVM votes. Results are announced constituency by constituency. The ECI declares the official result after all rounds of counting are complete.
-
-Right to Vote as a Fundamental Right: The right to vote is a statutory right under the Representation of the People Act, 1951, not a Fundamental Right under the Constitution. However, the Supreme Court of India has held that the right to elect is a constitutional right and is fundamental to Indian democracy.
-
-Minimum Age to Stand for Election: While the minimum age to vote is 18, the minimum age to contest in Lok Sabha and State Assembly elections is 25 years. For Rajya Sabha and State Legislative Council elections, the minimum age is 30 years.
-
-Reserved Constituencies (SC/ST): Certain constituencies in Lok Sabha and State Assemblies are reserved for candidates belonging to Scheduled Castes (SC) or Scheduled Tribes (ST). This reservation is based on population proportions and is reviewed after every Census. General voters in these constituencies can still vote, but only SC or ST candidates can contest.
-
-Election Symbols: Each political party recognized by the Election Commission is assigned an election symbol (e.g., lotus for BJP, hand for Congress). Independent candidates are assigned symbols from an approved list. These symbols appear on the EVM ballot to help voters, especially those who are illiterate, identify candidates.
-
-Voter Verifiable Paper Audit Trail (VVPAT): The VVPAT machine is attached to the EVM during elections. After a voter presses a button on the EVM, a paper slip is printed inside the VVPAT showing the candidate's name, party, and symbol. This slip is visible through a glass window for 7 seconds and then drops into a sealed bin. VVPAT slips are used for verification purposes during disputes.
-
-Candidate Nomination and Affidavit: Candidates contesting elections must file a nomination form along with a sworn affidavit declaring their assets, liabilities, criminal antecedents (if any), and educational qualifications. This information is publicly accessible and helps voters make informed choices.
-
-Anti-Defection Law: Under the Tenth Schedule of the Indian Constitution, a Member of Parliament or a Member of a State Legislature can be disqualified if they voluntarily give up their party's membership or vote against their party's direction in the legislature without authorization. This law prevents political defections and ensures party discipline.
-
-Booth Level Officer (BLO): A Booth Level Officer is a government official appointed by the Election Commission to manage voter registration and updates at the grassroots level, typically covering about 1,000 voters. Citizens can approach their BLO to register as a voter, update their address, or correct errors in their voter ID.
-
-Silent Zones and Polling Day Rules: On polling day, within 100 metres of a polling booth, campaigning is strictly prohibited. Political parties cannot display banners or hoardings in this zone. Voters must maintain silence and orderly conduct. Mobile phones cannot be used inside the voting compartment. Alcohol sale is banned 48 hours before polling in many states.
-
-Election Results and Result Disputes: After counting, the returning officer declares the winning candidate. Losing candidates can challenge election results by filing an Election Petition in the appropriate High Court within 45 days of the declaration of results, citing grounds such as corrupt practices, violation of election laws, or incorrect counting.
