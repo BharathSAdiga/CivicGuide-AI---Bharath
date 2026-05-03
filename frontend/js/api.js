@@ -13,8 +13,8 @@
  */
 
 // ── Configuration ──────────────────────────────────────────────────────────
-/** Backend base URL. Override via window.CIVICGUIDE_API_BASE for production. */
-const API_BASE = window.CIVICGUIDE_API_BASE || "http://127.0.0.1:5000";
+/** Backend base URL. Uses current origin in production if served together, else localhost. */
+const API_BASE = window.CIVICGUIDE_API_BASE || (window.location.port === "5500" ? "http://127.0.0.1:5000" : "");
 
 /** Default request timeout in milliseconds before AbortController fires. */
 const REQUEST_TIMEOUT_MS = 15_000;

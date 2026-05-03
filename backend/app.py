@@ -25,7 +25,8 @@ def create_app() -> Flask:
     Separating creation from startup allows the app to be imported
     in tests or WSGI servers without side-effects.
     """
-    app = Flask(__name__)
+    # Serve the frontend directory as the static folder at the root path
+    app = Flask(__name__, static_folder="../frontend", static_url_path="")
 
     # ── CORS ──────────────────────────────────────────────────────────────
     # Allow only whitelisted origins. Add more via the CORS_ORIGINS env var.
@@ -37,6 +38,19 @@ def create_app() -> Flask:
     # ── Knowledge Base ────────────────────────────────────────────────────
     # Pre-load the RAG knowledge base on startup so the first request is fast
     load_knowledge_base()
+
+    # ── Frontend Routes ───────────────────────────────────────────────────
+    @app.route("/")
+    def serve_index():
+        return app.send_static_file("index.html")
+        
+    @app.route("/<path:path>")
+    def serve_pages(path):
+        # Allow serving HTML pages without the .html extension
+        import os
+        if not os.path.splitext(path)[1]:
+            path += ".html"
+        return app.send_static_file(path)
 
     # ── Global Error Handlers ──────────────────────────────────────────────
     # These ensure every error — even unhandled ones — returns JSON so the
