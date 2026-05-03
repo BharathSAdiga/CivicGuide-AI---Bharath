@@ -1,6 +1,7 @@
 <div align="center">
 
-<img src="https://img.shields.io/badge/Powered%20by-Gemini%202.5%20Flash-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+<img src="https://img.shields.io/badge/Powered%20by-Groq%20Llama%203.1-F55036?style=for-the-badge&logo=ai&logoColor=white" />
+<img src="https://img.shields.io/badge/Embeddings-Sentence%20Transformers-FF9D00?style=for-the-badge&logo=huggingface&logoColor=white" />
 <img src="https://img.shields.io/badge/Backend-Flask%203.0-000000?style=for-the-badge&logo=flask&logoColor=white" />
 <img src="https://img.shields.io/badge/Frontend-Vanilla%20JS%20%7C%20ES%20Modules-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black" />
 <img src="https://img.shields.io/badge/Status-Production%20Ready-22c55e?style=for-the-badge" />
@@ -18,6 +19,11 @@ all in one beautifully designed, offline-resilient platform.
 <br/>
 
 [🚀 Live Demo](#-getting-started) · [📖 Docs](#-architecture) · [🐛 Issues](https://github.com/BharathSAdiga/CivicGuide-AI---Bharath/issues) · [⭐ Star this repo](https://github.com/BharathSAdiga/CivicGuide-AI---Bharath)
+
+<br/>
+
+**Deployed Link - (Cloud run URL)**
+* *[Insert your Google Cloud Run link here]*
 
 </div>
 
@@ -41,7 +47,7 @@ India conducts the world's largest democratic elections — yet millions of elig
 
 ## 💡 Solution Overview
 
-**CivicGuide AI** is a full-stack civic assistant that combines a **Gemini 2.5 Flash AI chatbot** with purpose-built tools for voter eligibility checking, election timeline exploration, and nearest polling booth discovery.
+**CivicGuide AI** is a full-stack civic assistant that combines a **Groq Llama 3.1 AI chatbot** and **Offline RAG Embeddings** with purpose-built tools for voter eligibility checking, election timeline exploration, and nearest polling booth discovery.
 
 ```
 Ask a question → Get a structured, personalised answer → Take action
@@ -57,7 +63,8 @@ The platform is designed around three principles:
 ## ✨ Features
 
 ### 🤖 AI Election Assistant (`/chat`)
-- Conversational chatbot powered by **Gemini 2.5 Flash**
+- Conversational chatbot powered by **Groq API (Llama-3.1-8b-instant)** for blazing-fast inference
+- **Offline RAG Pipeline** powered by local `sentence-transformers` ensuring zero-cost, unlimited semantic search
 - **Decision-based routing** — detects eligibility questions, vague queries, and how-to-vote intent before calling the AI
 - **Personalised responses** — adapts to user's name, age, and location (Bengaluru → gets Bengaluru-specific guidance)
 - **Bilingual** — toggle between English and Hindi (हिन्दी) mid-conversation
