@@ -120,6 +120,7 @@ function buildToast(message, theme) {
 
   const icon = document.createElement("span");
   icon.textContent = theme.icon;
+  icon.setAttribute("aria-hidden", "true");
   icon.style.flexShrink = "0";
 
   const text = document.createElement("span");

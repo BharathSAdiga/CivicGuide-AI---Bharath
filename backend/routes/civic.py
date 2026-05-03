@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
+from utils import error_response, success_response
 
 civic_bp = Blueprint("civic", __name__)
 
@@ -12,13 +13,13 @@ def civic_query():
     data = request.get_json(silent=True)
 
     if not data or "question" not in data:
-        return jsonify({"error": "Missing 'question' field in request body"}), 400
+        return error_response("Missing 'question' field in request body")
 
     question = data["question"].strip()
     location = data.get("location", "general").strip()
 
     if not question:
-        return jsonify({"error": "'question' cannot be empty"}), 400
+        return error_response("'question' cannot be empty")
 
     # TODO: Integrate AI model / RAG pipeline here
     response = {
@@ -37,7 +38,7 @@ def civic_query():
         ]
     }
 
-    return jsonify(response), 200
+    return success_response(response)
 
 
 @civic_bp.route("/services", methods=["GET"])
@@ -51,4 +52,4 @@ def list_services():
         {"id": "healthcare", "name": "Public Healthcare", "icon": "🏥"},
         {"id": "education", "name": "Education & Scholarships", "icon": "🎓"},
     ]
-    return jsonify({"services": services, "total": len(services)}), 200
+    return success_response({"services": services, "total": len(services)})

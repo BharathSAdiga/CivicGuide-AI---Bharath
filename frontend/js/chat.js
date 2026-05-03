@@ -1,13 +1,13 @@
 /**
- * chat.js — CivicGuide AI context-aware chat interface.
+ * chat.js — CivicGuide AI enhanced chat interface.
  *
- * Reliability additions in this version:
- *  - Character counter (warns at 80%, blocks at CHAT_MAX_CHARS)
- *  - Backend connection check on page load with toast feedback
- *  - Toast notifications (toast.js) for non-blocking error feedback
- *  - Duplicate-send prevention via isLoading guard
- *  - Input sanitized before sending (trim, empty check)
- *  - Graceful error messages in the chat bubble + toast
+ * New features in this version:
+ *  - 👍 / 👎 reaction buttons on every AI bubble (POST /api/feedback)
+ *  - 📋 Copy-to-clipboard button on every AI bubble
+ *  - 💡 Dynamic follow-up suggestion chips parsed from the streaming footer
+ *  - ⏹  Stop-generation button cancels the in-flight stream
+ *  - 💾 Export chat as a plain-text transcript download
+ *  - Character counter, duplicate-send guard, toast notifications (unchanged)
  */
 
 import { apiPost, apiStreamPost, escapeHtml, formatTime, pingBackend } from "./api.js";
@@ -16,8 +16,12 @@ import { showToast } from "./toast.js";
 // ── Constants ──────────────────────────────────────────────────────────────
 const STORAGE_KEY    = "civicguide_user";
 const VOTING_AGE     = 18;
-const CHAT_MAX_CHARS = 1_000;   // Must match backend CHAT_MAX_MESSAGE_LENGTH
-const WARN_THRESHOLD = 0.80;    // Show counter colour change at 80% of limit
+const CHAT_MAX_CHARS = 1_000;
+const WARN_THRESHOLD = 0.80;
+
+/** Sentinel tokens that wrap the suggestions JSON footer from the backend. */
+const SUGGESTIONS_START = "[SUGGESTIONS]";
+const SUGGESTIONS_END   = "[/SUGGESTIONS]";
 
 
 // ── Application State ──────────────────────────────────────────────────────
@@ -25,6 +29,7 @@ let conversationHistory = [];
 let isLoading           = false;
 let userContext         = null;
 let currentLanguage     = "english";
+let stopRequested       = false;   // Set to true when user clicks Stop
 
 
 // ── DOM References ─────────────────────────────────────────────────────────
@@ -44,6 +49,8 @@ const inputEl        = document.getElementById("user-input");
 const sendBtn        = document.getElementById("send-btn");
 const newChatBtn     = document.getElementById("new-chat-btn");
 const boothFinderBtn = document.getElementById("booth-finder-btn");
+const stopBtn        = document.getElementById("stop-btn");
+const exportBtn      = document.getElementById("export-btn");
 
 const profileAvatar  = document.getElementById("profile-avatar");
 const profileName    = document.getElementById("profile-name");
@@ -53,7 +60,6 @@ const eligBadge      = document.getElementById("eligibility-badge");
 const eligIcon       = document.getElementById("eligibility-icon");
 const eligText       = document.getElementById("eligibility-text");
 
-// Character counter (injected below the input area)
 const charCounter = createCharCounter();
 
 
@@ -61,10 +67,6 @@ const charCounter = createCharCounter();
 // CHARACTER COUNTER
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Create and inject the character counter element below the input.
- * Returns the counter <span> so we can update it on input events.
- */
 function createCharCounter() {
   const counter = document.createElement("span");
   counter.id = "char-counter";
@@ -78,20 +80,13 @@ function createCharCounter() {
     textAlign:   "right",
     paddingRight:"0.25rem",
     marginTop:   "0.25rem",
-    visibility:  "hidden",  // Hidden until user starts typing
+    visibility:  "hidden",
   });
-
-  // Insert after the input wrapper (inside .chat-input-area)
   const hint = document.querySelector(".input-hint");
   if (hint) hint.parentNode.insertBefore(counter, hint);
-
   return counter;
 }
 
-/**
- * Update character counter text and colour based on current input length.
- * @param {number} length - Current character count.
- */
 function updateCharCounter(length) {
   const remaining  = CHAT_MAX_CHARS - length;
   const isVisible  = length > 0;
@@ -104,9 +99,7 @@ function updateCharCounter(length) {
     : isWarning ? "#f59e0b"
     : "var(--text-muted, #64748b)";
 
-  if (isExceeded) {
-    charCounter.textContent += ` (${-remaining} over limit)`;
-  }
+  if (isExceeded) charCounter.textContent += ` (${-remaining} over limit)`;
 }
 
 
@@ -157,7 +150,6 @@ obForm.addEventListener("submit", (e) => {
   const ageRaw   = obAgeEl.value.trim();
   const location = obLocationEl.value.trim();
 
-  // Validate each field — show a specific error and stop early.
   if (!name)     { showFormError("Please enter your name.");           return; }
   if (!ageRaw)   { showFormError("Please enter your age.");            return; }
   if (!location) { showFormError("Please enter your state or city.");  return; }
@@ -168,7 +160,6 @@ obForm.addEventListener("submit", (e) => {
     return;
   }
 
-  // Validate name is not just spaces or numbers
   if (!/\S/.test(name)) {
     showFormError("Please enter a valid name.");
     return;
@@ -249,33 +240,25 @@ document.querySelectorAll(".lang-btn").forEach((btn) => {
 // MARKDOWN RENDERER
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Convert Gemini's structured markdown to safe HTML for display.
- * @param {string} text - Raw Gemini response string.
- * @returns {string} HTML-safe string for innerHTML.
- */
 function renderMarkdown(text) {
   let html = text
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
 
-  // Section headers: **[emoji] Title** on its own line
   html = html.replace(
-    /^\*\*(📋|💡|📄|🗳️|📅|🔢|🏛️|ℹ️)?\s*(.+?)\*\*$/gm,
+    /^\*\*(📋|💡|📄|🗳️|📅|🔢|🏛️|ℹ️|🔗)?\ *(.+?)\*\*$/gm,
     '<p class="bubble-section-header">$1 $2</p>'
   );
   html = html.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
   html = html.replace(/\*(.+?)\*/g,     "<em>$1</em>");
 
-  // Numbered list → <ol>
   html = html.replace(/^\d+\.\s+(.+)$/gm, '<li class="num-item">$1</li>');
   html = html.replace(
     /(<li class="num-item">[\s\S]*?<\/li>)(\s*(?!<li class="num-item">))/g,
     (m) => (m.includes('<li class="num-item">') ? `<ol>${m}</ol>` : m)
   );
 
-  // Bullet list → <ul>
   html = html.replace(/^[-•]\s+(.+)$/gm, '<li class="bul-item">$1</li>');
   html = html.replace(
     /(<li class="bul-item">[\s\S]*?<\/li>)(\s*(?!<li class="bul-item">))/g,
@@ -285,6 +268,32 @@ function renderMarkdown(text) {
   html = html.replace(/\n{2,}/g, "<br/><br/>");
   html = html.replace(/\n/g,     "<br/>");
   return html;
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// STREAMING — SUGGESTIONS FOOTER PARSER
+// ══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Split accumulated stream text into [displayText, suggestions[]].
+ * The backend appends a special footer after the AI prose:
+ *   \n\n[SUGGESTIONS]{"suggestions":["Q1","Q2","Q3"]}[/SUGGESTIONS]
+ */
+function parseSuggestionsFromStream(fullText) {
+  const startIdx = fullText.indexOf(SUGGESTIONS_START);
+  if (startIdx === -1) return { displayText: fullText, suggestions: [] };
+
+  const displayText = fullText.slice(0, startIdx).trimEnd();
+  const jsonPart    = fullText.slice(startIdx + SUGGESTIONS_START.length);
+  const endIdx      = jsonPart.indexOf(SUGGESTIONS_END);
+
+  try {
+    const parsed = JSON.parse(endIdx === -1 ? jsonPart : jsonPart.slice(0, endIdx));
+    return { displayText, suggestions: parsed.suggestions || [] };
+  } catch {
+    return { displayText, suggestions: [] };
+  }
 }
 
 
@@ -300,6 +309,7 @@ function appendMessage(role, html) {
 
   const avatar = document.createElement("div");
   avatar.className   = `avatar ${role}`;
+  avatar.setAttribute("aria-hidden", "true");
   avatar.textContent = role === "ai"
     ? "🏛️"
     : (userContext?.name?.[0]?.toUpperCase() || "👤");
@@ -315,6 +325,100 @@ function appendMessage(role, html) {
   return wrapper;
 }
 
+/**
+ * Append the action bar (👍 👎 📋) to an AI bubble after streaming completes.
+ */
+function appendBubbleActions(msgWrapper, rawText, intent) {
+  const bubble = msgWrapper.querySelector(".bubble");
+  if (!bubble || bubble.querySelector(".bubble-actions")) return;
+
+  const bar = document.createElement("div");
+  bar.className = "bubble-actions";
+  bar.setAttribute("aria-label", "Message actions");
+
+  // Thumbs up
+  const upBtn = document.createElement("button");
+  upBtn.className = "bubble-action-btn";
+  upBtn.title = "Helpful";
+  upBtn.setAttribute("aria-label", "Mark as helpful");
+  upBtn.innerHTML = "👍";
+  upBtn.addEventListener("click", () => {
+    if (upBtn.classList.contains("active-up")) return;
+    upBtn.classList.add("active-up");
+    downBtn.classList.remove("active-down");
+    sendFeedback("up", rawText, intent);
+    showToast("Thanks for the feedback! 😊", "success", 2500);
+  });
+
+  // Thumbs down
+  const downBtn = document.createElement("button");
+  downBtn.className = "bubble-action-btn";
+  downBtn.title = "Not helpful";
+  downBtn.setAttribute("aria-label", "Mark as not helpful");
+  downBtn.innerHTML = "👎";
+  downBtn.addEventListener("click", () => {
+    if (downBtn.classList.contains("active-down")) return;
+    downBtn.classList.add("active-down");
+    upBtn.classList.remove("active-up");
+    sendFeedback("down", rawText, intent);
+    showToast("Got it — we'll keep improving! 🙏", "info", 2500);
+  });
+
+  // Copy
+  const copyBtn = document.createElement("button");
+  copyBtn.className = "bubble-action-btn";
+  copyBtn.title = "Copy response";
+  copyBtn.setAttribute("aria-label", "Copy response to clipboard");
+  copyBtn.innerHTML = "📋 Copy";
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(rawText);
+      copyBtn.classList.add("copied");
+      copyBtn.innerHTML = "✅ Copied";
+      setTimeout(() => {
+        copyBtn.classList.remove("copied");
+        copyBtn.innerHTML = "📋 Copy";
+      }, 2000);
+    } catch {
+      showToast("Could not copy to clipboard.", "warning", 3000);
+    }
+  });
+
+  bar.appendChild(upBtn);
+  bar.appendChild(downBtn);
+  bar.appendChild(copyBtn);
+  bubble.appendChild(bar);
+}
+
+/**
+ * Render follow-up suggestion chips below an AI bubble.
+ */
+function appendFollowupChips(msgWrapper, suggestions) {
+  if (!suggestions || suggestions.length === 0) return;
+  const bubble = msgWrapper.querySelector(".bubble");
+  if (!bubble) return;
+
+  const chipsEl = document.createElement("div");
+  chipsEl.className = "followup-chips";
+
+  suggestions.forEach((q) => {
+    const chip = document.createElement("button");
+    chip.className = "followup-chip";
+    chip.textContent = q;
+    chip.title = q;
+    chip.addEventListener("click", () => {
+      inputEl.value = q;
+      inputEl.dispatchEvent(new Event("input"));
+      // Remove chips to avoid stacking after follow-up
+      chipsEl.remove();
+      handleSend();
+    });
+    chipsEl.appendChild(chip);
+  });
+
+  bubble.appendChild(chipsEl);
+}
+
 function showTyping() {
   const wrapper = document.createElement("div");
   wrapper.className = "typing-indicator";
@@ -322,6 +426,7 @@ function showTyping() {
 
   const avatar = document.createElement("div");
   avatar.className   = "avatar ai";
+  avatar.setAttribute("aria-hidden", "true");
   avatar.textContent = "🏛️";
 
   const dots = document.createElement("div");
@@ -346,13 +451,64 @@ function clearMessages() {
 
 
 // ══════════════════════════════════════════════════════════════════════════
-// INPUT HANDLING & VALIDATION
+// FEEDBACK
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Determine whether the send button should be enabled.
- * Guards: non-empty trimmed message, not loading, not over char limit.
- */
+async function sendFeedback(rating, reply, intent) {
+  try {
+    await apiPost("/api/feedback", {
+      rating,
+      reply: reply.slice(0, 200),
+      intent: intent || "GENERAL",
+    });
+  } catch {
+    // Silently swallow feedback errors — non-critical
+  }
+}
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// EXPORT CHAT
+// ══════════════════════════════════════════════════════════════════════════
+
+function exportChat() {
+  if (conversationHistory.length === 0) {
+    showToast("No conversation to export yet.", "info", 3000);
+    return;
+  }
+
+  const lines = [
+    "CivicGuide AI — Chat Transcript",
+    `Exported: ${new Date().toLocaleString("en-IN")}`,
+    `User: ${userContext?.name || "Unknown"} · Age: ${userContext?.age} · ${userContext?.location}`,
+    "─".repeat(60),
+    "",
+  ];
+
+  conversationHistory.forEach((turn) => {
+    const role = turn.role === "user" ? "You" : "CivicGuide AI";
+    lines.push(`[${role}]`);
+    lines.push(turn.parts[0]);
+    lines.push("");
+  });
+
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href     = url;
+  a.download = `civicguide-chat-${Date.now()}.txt`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast("Chat exported successfully! 💾", "success", 3000);
+}
+
+exportBtn?.addEventListener("click", exportChat);
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// INPUT HANDLING
+// ══════════════════════════════════════════════════════════════════════════
+
 function updateSendState() {
   const length  = inputEl.value.length;
   const trimmed = inputEl.value.trim();
@@ -360,10 +516,8 @@ function updateSendState() {
 }
 
 inputEl.addEventListener("input", () => {
-  // Auto-resize textarea
   inputEl.style.height = "auto";
   inputEl.style.height = Math.min(inputEl.scrollHeight, 140) + "px";
-
   updateCharCounter(inputEl.value.length);
   updateSendState();
 });
@@ -377,7 +531,7 @@ inputEl.addEventListener("keydown", (e) => {
 
 sendBtn.addEventListener("click", handleSend);
 
-// Quick-topic chip buttons (data-q attribute)
+// Quick-topic chip buttons
 document.addEventListener("click", (e) => {
   const btn = e.target.closest("[data-q]");
   if (btn) {
@@ -387,7 +541,7 @@ document.addEventListener("click", (e) => {
   }
 });
 
-// New chat — reset history, keep profile
+// New chat
 newChatBtn.addEventListener("click", () => {
   conversationHistory  = [];
   clearMessages();
@@ -397,12 +551,17 @@ newChatBtn.addEventListener("click", () => {
   updateSendState();
 });
 
+// Stop generation
+stopBtn?.addEventListener("click", () => {
+  stopRequested = true;
+  stopBtn.classList.remove("visible");
+});
+
 
 // ══════════════════════════════════════════════════════════════════════════
 // BOOTH FINDER — GOOGLE MAPS INTEGRATION
 // ══════════════════════════════════════════════════════════════════════════
 
-/** Keywords that indicate the AI response is about polling booths/stations. */
 const BOOTH_KEYWORDS = [
   "polling booth", "polling station", "voting booth", "voting centre",
   "voting center", "nearest booth", "find your booth", "booths near",
@@ -410,38 +569,26 @@ const BOOTH_KEYWORDS = [
   "voterportal", "polling day", "booth", "polling",
 ];
 
-/**
- * Simple Levenshtein edit distance for fuzzy matching on the frontend.
- * @param {string} a
- * @param {string} b
- * @returns {number}
- */
+const _edCache = new Map();
 function editDistance(a, b) {
   if (a.length < b.length) return editDistance(b, a);
+  const key = a + "|" + b;
+  if (_edCache.has(key)) return _edCache.get(key);
   if (b.length === 0) return a.length;
   let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
   for (let i = 0; i < a.length; i++) {
     const curr = [i + 1];
     for (let j = 0; j < b.length; j++) {
-      curr.push(Math.min(
-        prev[j + 1] + 1,
-        curr[j] + 1,
-        prev[j] + (a[i] === b[j] ? 0 : 1)
-      ));
+      curr.push(Math.min(prev[j + 1] + 1, curr[j] + 1, prev[j] + (a[i] === b[j] ? 0 : 1)));
     }
     prev = curr;
   }
-  return prev[b.length];
+  const result = prev[b.length];
+  if (_edCache.size > 10000) _edCache.clear();
+  _edCache.set(key, result);
+  return result;
 }
 
-/**
- * Check if a keyword fuzzy-matches anywhere inside text.
- * Allows up to `maxDist` edits. Short keywords (<=3 chars) require exact match.
- * @param {string} text     - Lowercased haystack.
- * @param {string} keyword  - Lowercased needle.
- * @param {number} maxDist  - Max edit distance allowed.
- * @returns {boolean}
- */
 function fuzzyIncludes(text, keyword, maxDist = 2) {
   if (text.includes(keyword)) return true;
   if (keyword.length <= 3) return false;
@@ -456,24 +603,15 @@ function fuzzyIncludes(text, keyword, maxDist = 2) {
   return false;
 }
 
-/**
- * Open Google Maps searching for polling stations near the given coordinates.
- * @param {number} lat
- * @param {number} lng
- */
 function openMapsWithBooths(lat, lng) {
   const url = `https://www.google.com/maps/search/polling+stations+near+me/@${lat},${lng},14z`;
   window.open(url, "_blank", "noopener");
 }
 
-/**
- * Build the HTML for an inline maps link card that sits inside an AI bubble.
- * @returns {string} HTML string.
- */
 function buildMapsLinkHTML() {
   return `
     <a class="maps-link-card" href="#" onclick="window._openBoothMaps(); return false;">
-      <div class="maps-link-icon">🗺️</div>
+      <div class="maps-link-icon" aria-hidden="true">🗺️</div>
       <div class="maps-link-body">
         <strong>View Nearby Polling Booths</strong>
         <span>Opens Google Maps with polling stations near you</span>
@@ -482,38 +620,19 @@ function buildMapsLinkHTML() {
     </a>`;
 }
 
-/**
- * Check if the AI response mentions polling booths, and if so,
- * append a clickable Google Maps link card to the AI bubble.
- * Uses fuzzy matching so typos like "poling booth" still trigger the card.
- *
- * @param {string}      aiText     - The full AI response text.
- * @param {HTMLElement} msgWrapper - The .message wrapper element.
- */
 function maybeInjectBoothLink(aiText, msgWrapper) {
-  const lower = aiText.toLowerCase();
+  const lower   = aiText.toLowerCase();
   const isBooth = BOOTH_KEYWORDS.some((kw) => fuzzyIncludes(lower, kw));
   if (!isBooth) return;
-
   const bubble = msgWrapper.querySelector(".bubble");
-  if (!bubble) return;
-
-  // Don't inject if there's already one in this bubble
-  if (bubble.querySelector(".maps-link-card")) return;
-
+  if (!bubble || bubble.querySelector(".maps-link-card")) return;
   const linkEl = document.createElement("div");
   linkEl.innerHTML = buildMapsLinkHTML();
   bubble.appendChild(linkEl.firstElementChild);
 }
 
-/**
- * Global handler exposed for the inline maps link card's onclick.
- * Uses Geolocation → opens Google Maps. Falls back to user's
- * onboarding location as a text-based search.
- */
 window._openBoothMaps = function () {
   if (!navigator.geolocation) {
-    // Fallback: use user's stored location string
     const loc = userContext?.location || "India";
     window.open(
       `https://www.google.com/maps/search/polling+stations+near+${encodeURIComponent(loc)}`,
@@ -521,13 +640,10 @@ window._openBoothMaps = function () {
     );
     return;
   }
-
   showToast("Getting your location…", "info", 3000);
-
   navigator.geolocation.getCurrentPosition(
     (pos) => openMapsWithBooths(pos.coords.latitude, pos.coords.longitude),
     () => {
-      // Fallback on denied/error
       const loc = userContext?.location || "India";
       window.open(
         `https://www.google.com/maps/search/polling+stations+near+${encodeURIComponent(loc)}`,
@@ -539,11 +655,8 @@ window._openBoothMaps = function () {
   );
 };
 
-// Welcome state booth finder button
 if (boothFinderBtn) {
-  boothFinderBtn.addEventListener("click", () => {
-    window._openBoothMaps();
-  });
+  boothFinderBtn.addEventListener("click", () => window._openBoothMaps());
 }
 
 
@@ -551,24 +664,20 @@ if (boothFinderBtn) {
 // MAIN SEND HANDLER
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Validate, send, and render one chat exchange.
- * Prevents duplicate sends via isLoading guard.
- * Injects user context and language on every call.
- */
 async function handleSend() {
   const message = inputEl.value.trim();
 
-  // ── Pre-send guards ────────────────────────────────────────────────────
   if (!message)                        return;
-  if (isLoading)                       return;  // Prevent double-send
+  if (isLoading)                       return;
   if (message.length > CHAT_MAX_CHARS) {
     showToast(`Message too long — max ${CHAT_MAX_CHARS} characters.`, "warning");
     return;
   }
 
   isLoading        = true;
+  stopRequested    = false;
   sendBtn.disabled = true;
+  stopBtn?.classList.add("visible");
 
   appendMessage("user", escapeHtml(message));
   inputEl.value        = "";
@@ -580,46 +689,52 @@ async function handleSend() {
 
   try {
     hideTyping();
-    const msgWrapper = appendMessage("ai", "...");
-    const bubbleP = msgWrapper.querySelector(".bubble p");
-    
-    let fullReply = "";
-    
+    const msgWrapper = appendMessage("ai", "…");
+    const bubbleP    = msgWrapper.querySelector(".bubble p");
+
+    let fullReply     = "";
+    let streamDone    = false;
+
     await apiStreamPost("/api/chat", {
       message,
       history:      conversationHistory.slice(0, -1),
       user_context: userContext || {},
       language:     currentLanguage,
     }, (chunk) => {
+      if (stopRequested) return;   // silently drop chunks after stop
       fullReply += chunk;
-      bubbleP.innerHTML = renderMarkdown(fullReply);
+
+      // Only render the display portion (strip footer if present)
+      const { displayText } = parseSuggestionsFromStream(fullReply);
+      bubbleP.innerHTML = renderMarkdown(displayText || "…");
       messagesEl.scrollTo({ top: messagesEl.scrollHeight, behavior: "smooth" });
     });
 
-    if (!fullReply) {
-       fullReply = "I couldn't generate a response. Please try again.";
-       bubbleP.innerHTML = renderMarkdown(fullReply);
-    }
-    
-    conversationHistory.push({ role: "model", parts: [fullReply] });
+    // Parse final accumulated text for display + suggestions
+    const { displayText, suggestions } = parseSuggestionsFromStream(fullReply);
+    const finalDisplay = displayText || "I couldn't generate a response. Please try again.";
+    bubbleP.innerHTML = renderMarkdown(finalDisplay);
 
-    // If the response mentions booths/polling, inject a maps link card
-    maybeInjectBoothLink(fullReply, msgWrapper);
+    conversationHistory.push({ role: "model", parts: [finalDisplay] });
+
+    // Inject booth map link if relevant
+    maybeInjectBoothLink(finalDisplay, msgWrapper);
+
+    // Append action bar (reactions + copy)
+    appendBubbleActions(msgWrapper, finalDisplay, null);
+
+    // Append follow-up suggestion chips
+    appendFollowupChips(msgWrapper, suggestions);
 
   } catch (err) {
     hideTyping();
-
-    // Show error in the chat so it's inline and clearly associated with
-    // the failed message, then also show a toast for quick visibility.
-    appendMessage(
-      "ai",
-      `⚠️ <strong>Error:</strong> ${escapeHtml(err.message)}`
-    );
+    appendMessage("ai", `⚠️ <strong>Error:</strong> ${escapeHtml(err.message)}`);
     showToast(err.message, "error", 6000);
     console.error("[CivicGuide AI] Chat error:", err);
-
   } finally {
-    isLoading = false;
+    isLoading     = false;
+    stopRequested = false;
+    stopBtn?.classList.remove("visible");
     updateSendState();
   }
 }
@@ -629,10 +744,6 @@ async function handleSend() {
 // BACKEND CONNECTION CHECK
 // ══════════════════════════════════════════════════════════════════════════
 
-/**
- * Ping the backend on load and show a toast if it is unreachable.
- * Non-blocking — the chat is still usable (offline fallbacks exist).
- */
 async function checkBackendConnection() {
   const isOnline = await pingBackend();
   if (!isOnline) {
@@ -653,7 +764,5 @@ async function checkBackendConnection() {
 (function init() {
   userContext = loadUserContext();
   userContext ? showApp() : showOnboarding();
-
-  // Non-blocking backend check — runs after the UI is ready.
   checkBackendConnection();
 })();

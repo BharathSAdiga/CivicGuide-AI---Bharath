@@ -11,14 +11,14 @@
 
   <nav class="navbar">
     <a href="index.html" class="navbar-brand">
-      <div class="brand-icon">🏛️</div>
+      <div class="brand-icon" aria-hidden="true">🏛️</div>
       <span class="brand-name">CivicGuide AI</span>
     </a>
     <ul class="navbar-links">
       <li><a href="index.html">Home</a></li>
       <li><a href="eligibility.html">Eligibility</a></li>
       <li><a href="timeline.html">Timeline</a></li>
-      <li><a href="booths.html" class="active">Find Booth</a></li>
+      <li><a href="booths.html" class="active" aria-current="page">Find Booth</a></li>
       <li><a href="chat.html">Assistant</a></li>
     </ul>
     <div style="display: flex; align-items: center; gap: 1rem;">
@@ -26,7 +26,7 @@
         <span class="icon-sun">☀️</span>
         <span class="icon-moon">🌙</span>
       </button>
-      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">☰</button>
     </div>
   </nav>
 
@@ -47,7 +47,7 @@
         <h2>📍 Search Location</h2>
 
         <div class="search-input-wrap">
-          <span class="search-icon">🔍</span>
+          <span class="search-icon" aria-hidden="true">🔍</span>
           <input
             type="text"
             id="location-input"
@@ -73,7 +73,7 @@
         <h2>🗳️ Nearest Booths</h2>
         <div class="results-list" id="results-list">
           <div class="empty-results">
-            <span class="empty-icon">🗺️</span>
+            <span class="empty-icon" aria-hidden="true">🗺️</span>
             Search a location to see nearby polling booths.
           </div>
         </div>
@@ -84,7 +84,7 @@
     <!-- ── Map Panel ─────────────────────────────────── -->
     <div class="map-panel">
       <div id="map-placeholder" class="map-placeholder">
-        <span class="map-icon">🗺️</span>
+        <span class="map-icon" aria-hidden="true">🗺️</span>
         <h3>Map will appear here</h3>
         <p>Search a location to load the map with nearby polling booth markers.</p>
       </div>

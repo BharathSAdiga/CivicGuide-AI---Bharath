@@ -186,7 +186,7 @@ function buildPhaseHTML(p) {
     ? `<div>
          <div class="action-heading">💡 Your Action</div>
          <div class="citizen-action-box ${colorClass}">
-           <span class="action-icon">👤</span>
+           <span class="action-icon" aria-hidden="true">👤</span>
            <span>${escapeHtml(p.citizen_action)}</span>
          </div>
        </div>`

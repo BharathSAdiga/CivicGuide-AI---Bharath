@@ -11,8 +11,9 @@ Usage:
 
 from flask import Flask, jsonify
 from flask_cors import CORS
+import os
 
-from config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, CORS_ORIGINS
+from config import FLASK_HOST, FLASK_PORT, FLASK_DEBUG, CORS_ORIGINS, SECRET_KEY
 from routes import register_routes
 from rag import load_knowledge_base
 
@@ -27,6 +28,7 @@ def create_app() -> Flask:
     """
     # Serve the frontend directory as the static folder at the root path
     app = Flask(__name__, static_folder="../frontend", static_url_path="")
+    app.config["SECRET_KEY"] = SECRET_KEY
 
     # ── CORS ──────────────────────────────────────────────────────────────
     # Allow only whitelisted origins. Add more via the CORS_ORIGINS env var.
@@ -46,11 +48,14 @@ def create_app() -> Flask:
         
     @app.route("/<path:path>")
     def serve_pages(path):
+        # Guard against path traversal (e.g. "../../etc/passwd")
+        safe_path = os.path.normpath(path).lstrip("/\\")
+        if ".." in safe_path:
+            return jsonify({"error": "Forbidden"}), 403
         # Allow serving HTML pages without the .html extension
-        import os
-        if not os.path.splitext(path)[1]:
-            path += ".html"
-        return app.send_static_file(path)
+        if not os.path.splitext(safe_path)[1]:
+            safe_path += ".html"
+        return app.send_static_file(safe_path)
 
     # ── Global Error Handlers ──────────────────────────────────────────────
     # These ensure every error — even unhandled ones — returns JSON so the
@@ -92,6 +97,35 @@ def create_app() -> Flask:
         """Catch-all for any exception not caught by a route handler."""
         app.logger.exception("Unhandled exception: %s", err)
         return jsonify({"error": "An unexpected error occurred"}), 500
+
+    # ── Security Headers ───────────────────────────────────────────────────
+    # Applied to every response to harden against common web attacks.
+    @app.after_request
+    def set_security_headers(response):
+        # Prevent browsers from MIME-sniffing the content type
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # Block clickjacking
+        response.headers["X-Frame-Options"] = "DENY"
+        # Enable XSS filter in older browsers
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        # Enforce strict referrer policy
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        # Content Security Policy — restrict resource origins to prevent XSS
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://maps.googleapis.com https://maps.gstatic.com; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+            "font-src 'self' https://fonts.gstatic.com; "
+            "img-src 'self' data: https://maps.googleapis.com https://maps.gstatic.com; "
+            "connect-src 'self' https://maps.googleapis.com; "
+            "frame-src 'none'; "
+            "object-src 'none';"
+        )
+        # Control which browser features the page can use
+        response.headers["Permissions-Policy"] = "camera=(), microphone=()"
+        # Remove the Flask/Werkzeug server banner
+        response.headers["Server"] = "CivicGuide"
+        return response
 
     # ── Request size limit ─────────────────────────────────────────────────
     # Prevent extremely large payloads from reaching route handlers.

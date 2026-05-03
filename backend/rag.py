@@ -1,6 +1,7 @@
 import os
 import math
 import logging
+from functools import lru_cache
 try:
     from sentence_transformers import SentenceTransformer
 except ImportError:
@@ -66,14 +67,8 @@ def load_knowledge_base():
         _chunks = []
         _embeddings = []
 
-def retrieve(query: str, top_k: int = 3) -> str:
-    """Retrieve top_k relevant chunks for the given query."""
-    if not _chunks or not _embeddings:
-        load_knowledge_base()
-        
-    if not _chunks or not _embeddings:
-        return ""
-        
+@lru_cache(maxsize=1024)
+def _retrieve_cached(query: str, top_k: int) -> str:
     try:
         model = get_embed_model()
         if not model:
@@ -97,3 +92,13 @@ def retrieve(query: str, top_k: int = 3) -> str:
     except Exception as e:
         logger.error(f"Error in RAG retrieval: {e}")
         return ""
+
+def retrieve(query: str, top_k: int = 3) -> str:
+    """Retrieve top_k relevant chunks for the given query."""
+    if not _chunks or not _embeddings:
+        load_knowledge_base()
+        
+    if not _chunks or not _embeddings:
+        return ""
+        
+    return _retrieve_cached(query, top_k)

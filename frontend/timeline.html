@@ -12,13 +12,13 @@
   <!-- Navbar -->
   <nav class="navbar">
     <a href="index.html" class="navbar-brand">
-      <div class="brand-icon">🏛️</div>
+      <div class="brand-icon" aria-hidden="true">🏛️</div>
       <span class="brand-name">CivicGuide AI</span>
     </a>
     <ul class="navbar-links">
       <li><a href="index.html">Home</a></li>
       <li><a href="eligibility.html">Eligibility</a></li>
-      <li><a href="timeline.html" class="active">Timeline</a></li>
+      <li><a href="timeline.html" class="active" aria-current="page">Timeline</a></li>
       <li><a href="booths.html">Find Booth</a></li>
       <li><a href="chat.html">Assistant</a></li>
     </ul>
@@ -27,7 +27,7 @@
         <span class="icon-sun">☀️</span>
         <span class="icon-moon">🌙</span>
       </button>
-      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">☰</button>
     </div>
   </nav>
 
@@ -49,10 +49,10 @@
   <main>
   <!-- Election Type Selector -->
   <div class="type-selector" id="type-selector" role="group" aria-label="Election type">
-    <button class="type-btn active" data-type="lok_sabha"       id="btn-lok_sabha">🇮🇳 Lok Sabha</button>
-    <button class="type-btn"        data-type="state_assembly"  id="btn-state_assembly">🏛️ State Assembly</button>
-    <button class="type-btn"        data-type="rajya_sabha"     id="btn-rajya_sabha">📜 Rajya Sabha</button>
-    <button class="type-btn"        data-type="local_body"      id="btn-local_body">🏘️ Local Body</button>
+    <button class="type-btn active" data-type="lok_sabha"       id="btn-lok_sabha" aria-pressed="true">🇮🇳 Lok Sabha</button>
+    <button class="type-btn"        data-type="state_assembly"  id="btn-state_assembly" aria-pressed="false">🏛️ State Assembly</button>
+    <button class="type-btn"        data-type="rajya_sabha"     id="btn-rajya_sabha" aria-pressed="false">📜 Rajya Sabha</button>
+    <button class="type-btn"        data-type="local_body"      id="btn-local_body" aria-pressed="false">🏘️ Local Body</button>
   </div>
 
   <!-- Election Meta Bar -->
@@ -88,7 +88,7 @@
   <!-- Note box + Calendar CTA -->
   <div class="note-bar">
     <div class="note-box">
-      <span class="note-icon">ℹ️</span>
+      <span class="note-icon" aria-hidden="true">ℹ️</span>
       <span id="note-text">
         Dates shown are relative to Voting Day. Actual calendar dates are announced by the ECI.
         Check <a href="https://eci.gov.in" target="_blank" style="color:#a5b4fc;">eci.gov.in</a>

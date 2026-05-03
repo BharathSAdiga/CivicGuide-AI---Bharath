@@ -17,9 +17,24 @@ GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
 GROQ_MODEL:   str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 # ── Server ────────────────────────────────────────────────────────────────
-FLASK_HOST:  str = os.getenv("FLASK_HOST", "0.0.0.0")
+FLASK_HOST:  str = os.getenv("FLASK_HOST", "127.0.0.1")  # Bind to localhost only by default
 FLASK_PORT:  int = int(os.getenv("FLASK_PORT", "5000"))
-FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "1") == "1"
+FLASK_DEBUG: bool = os.getenv("FLASK_DEBUG", "0") == "1"  # SAFE: off by default
+
+# ── Secret Key ────────────────────────────────────────────────────────────
+# Must be set to a strong random value in production via the SECRET_KEY env var.
+_SECRET_KEY_RAW: str = os.getenv("SECRET_KEY", "")
+if not _SECRET_KEY_RAW or _SECRET_KEY_RAW == "change-this-in-production":
+    import secrets as _secrets
+    import warnings
+    _SECRET_KEY_RAW = _secrets.token_hex(32)
+    warnings.warn(
+        "SECRET_KEY is not set or is using the default placeholder. "
+        "A random key was generated for this session — set a persistent SECRET_KEY "
+        "in your .env file for production.",
+        stacklevel=2,
+    )
+SECRET_KEY: str = _SECRET_KEY_RAW
 
 # ── CORS ──────────────────────────────────────────────────────────────────
 # Comma-separated origins; defaults cover local dev (Live Server + React dev)

@@ -1,4 +1,5 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request
+from utils import error_response, success_response
 
 timeline_bp = Blueprint("timeline", __name__)
 
@@ -264,14 +265,12 @@ def get_timeline():
     if phase_id:
         phases = [p for p in PHASES if p["id"] == phase_id]
         if not phases:
-            return jsonify({
-                "error": f"Phase '{phase_id}' not found.",
-                "valid_phases": [p["id"] for p in PHASES]
-            }), 404
+            valid = ", ".join([p["id"] for p in PHASES])
+            return error_response(f"Phase '{phase_id}' not found. Valid phases: {valid}", 404)
     else:
         phases = PHASES
 
-    return jsonify({
+    return success_response({
         "election":     election_meta,
         "election_type": election_type,
         "phases":       phases,
@@ -281,15 +280,15 @@ def get_timeline():
             "Actual calendar dates are announced by ECI before each election. "
             "Check eci.gov.in for the official schedule."
         )
-    }), 200
+    })
 
 
 @timeline_bp.route("/timeline/phases", methods=["GET"])
 def list_phases():
     """Return a summary list of all phases (id + name + icon only)."""
-    return jsonify({
+    return success_response({
         "phases": [
             {"id": p["id"], "name": p["name"], "icon": p["icon"], "order": p["order"]}
             for p in PHASES
         ]
-    }), 200
+    })

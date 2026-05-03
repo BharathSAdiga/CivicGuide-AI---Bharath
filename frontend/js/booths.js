@@ -249,7 +249,7 @@ function renderResults(booths) {
   if (!booths.length) {
     resultsList.innerHTML = `
       <div class="empty-results">
-        <span class="empty-icon">😕</span>
+        <span class="empty-icon" aria-hidden="true">😕</span>
         No booths found near this location. Try a different city or area.
       </div>`;
     return;
@@ -263,9 +263,9 @@ function renderResults(booths) {
       </div>
       <div class="booth-address">${escapeHtml(b.address)}</div>
       <div class="booth-meta">
-        <span class="booth-tag">🏛️ ${escapeHtml(b.ward)}</span>
-        <span class="booth-tag">🗳️ ${b.booths} booths</span>
-        ${b.accessible ? '<span class="booth-tag">♿ Accessible</span>' : ""}
+        <span class="booth-tag"><span aria-hidden="true">🏛️</span> ${escapeHtml(b.ward)}</span>
+        <span class="booth-tag"><span aria-hidden="true">🗳️</span> ${b.booths} booths</span>
+        ${b.accessible ? '<span class="booth-tag"><span aria-hidden="true">♿</span> Accessible</span>' : ""}
       </div>
     </div>
   `).join("");
@@ -515,7 +515,7 @@ window.addEventListener("load", () => {
   setTimeout(() => {
     if (window.mapsLoadError || (!window.google && !window.initMapCalled)) {
       mapPlaceholder.innerHTML = `
-        <span class="map-icon">🗺️</span>
+        <span class="map-icon" aria-hidden="true">🗺️</span>
         <h3>Map Unavailable</h3>
         <p>Add your <strong>Google Maps API key</strong> to <code>booths.html</code>
            to enable the interactive map. Booth results still work below.</p>

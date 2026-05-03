@@ -1,39 +1,34 @@
 """
-routes/chat.py — Gemini AI chat endpoint for CivicGuide AI.
+routes/chat.py — CivicGuide AI enhanced chat endpoint.
 
-Uses the current google-genai SDK (google.genai), replacing the deprecated
-google.generativeai package.
+Uses the Groq API (llama-3.1-8b-instant) with:
+  - Intent classification (HOW_TO, ELIGIBILITY, DOCUMENTS, GENERAL, etc.)
+  - Sentiment-aware routing (confused / frustrated users get extra help)
+  - Follow-up question suggestions appended as a JSON footer after streaming
+  - Thumbs-up / thumbs-down feedback endpoint (/api/feedback)
+  - Smarter system prompt for structured, concise, cited responses
+  - Expanded fuzzy matching patterns
 
 Endpoints
 ---------
-POST /api/chat
-    Accepts a user message and optional conversation history, user context
-    (name / age / location), and language preference. Applies decision-based
-    routing before forwarding to Gemini so responses are always relevant.
-
-Design decisions
-----------------
-- The Gemini client is initialised once at module level (CLIENT) to avoid
-  creating a new HTTP connection per request.
-- Decision routing (build_decision_prefix) runs BEFORE the Gemini call so the
-  model always has the right framing — no post-processing needed.
-- Language injection is done via a plain-text directive inside the prompt rather
-  than a separate translation API call, keeping latency low.
-- History is converted from [{role, parts}] Gemini format to the Content list
-  format expected by the new SDK before each call.
-- Fuzzy matching is applied to keyword detection so users with typos (e.g.
-  "how to vot", "regsiter", "eligble") are still routed correctly.
+POST /api/chat        — Main streaming chat endpoint
+POST /api/feedback    — Record user feedback (thumbs up/down) in server logs
 """
 
 import re
+import json
 import unicodedata
+import os
+import logging
+from collections import Counter
+from functools import lru_cache
 
 try:
     from groq import Groq
 except ImportError:
     Groq = None
 
-from flask import Blueprint, request, Response, stream_with_context
+from flask import Blueprint, request, Response, stream_with_context, jsonify
 
 from config import (
     GROQ_API_KEY, GROQ_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES,
@@ -43,18 +38,15 @@ from utils import error_response, success_response
 from rag import retrieve
 
 chat_bp = Blueprint("chat", __name__)
+logger = logging.getLogger(__name__)
 
 
 # ── Groq Client (module-level singleton) ─────────────────────────────────
 _client = None
 
 def get_client():
-    """
-    Return the module-level Groq client.
-    """
     global _client
     if _client is None:
-        import os
         groq_key = os.getenv("GROQ_API_KEY", "")
         if not groq_key:
             raise EnvironmentError("GROQ_API_KEY is not set.")
@@ -66,21 +58,16 @@ def get_client():
 
 # ── Typo-Tolerant Fuzzy Matching ───────────────────────────────────────────
 
+@lru_cache(maxsize=4096)
 def _edit_distance(s1: str, s2: str) -> int:
-    """
-    Compute the Levenshtein edit distance between two strings.
-    Used for fuzzy keyword matching to tolerate user typos.
-    """
     if len(s1) < len(s2):
         return _edit_distance(s2, s1)
     if len(s2) == 0:
         return len(s1)
-
     prev_row = list(range(len(s2) + 1))
     for i, c1 in enumerate(s1):
         curr_row = [i + 1]
         for j, c2 in enumerate(s2):
-            # Substitution, insertion, deletion
             curr_row.append(min(
                 prev_row[j + 1] + 1,
                 curr_row[j] + 1,
@@ -90,141 +77,222 @@ def _edit_distance(s1: str, s2: str) -> int:
     return prev_row[-1]
 
 
+@lru_cache(maxsize=1024)
 def normalize_message(text: str) -> str:
-    """
-    Normalize user input for more reliable pattern matching.
-
-    - Lowercases
-    - Strips accents / diacritics (e.g. résumé → resume)
-    - Collapses multiple spaces / punctuation runs into single space
-    - Removes leading/trailing whitespace
-    """
     text = text.lower().strip()
-    # Strip Unicode accents (keeps Devanagari intact)
     nfkd = unicodedata.normalize("NFKD", text)
     text = "".join(c for c in nfkd if not unicodedata.combining(c))
-    # Collapse whitespace & strip stray punctuation between words
     text = re.sub(r"[\s]+", " ", text)
     return text
 
 
 def fuzzy_contains(haystack: str, needle: str, max_distance: int = 2) -> bool:
-    """
-    Check if *needle* appears anywhere inside *haystack* with at most
-    *max_distance* character edits (Levenshtein distance).
-
-    Works on a sliding-window basis: for each window of len(needle)±1
-    characters in haystack, we check the edit distance.
-
-    Short needles (≤3 chars) require exact match to avoid false positives.
-    """
     if not needle or not haystack:
         return False
-
-    # Exact match fast path
     if needle in haystack:
         return True
-
-    # Short keywords must match exactly to avoid false positives
     if len(needle) <= 3:
         return False
-
-    # Sliding window fuzzy search
     n_len = len(needle)
     for window_size in range(max(1, n_len - 1), n_len + 2):
         for i in range(len(haystack) - window_size + 1):
             window = haystack[i : i + window_size]
             dist = _edit_distance(window, needle)
-            # Scale max allowed distance: longer words tolerate more errors
             allowed = min(max_distance, max(1, n_len // 4))
             if n_len >= 8:
-                allowed = max_distance  # full tolerance for long patterns
+                allowed = max_distance
             if dist <= allowed:
                 return True
     return False
 
 
-def fuzzy_any(text: str, patterns: list[str], max_distance: int = 2) -> bool:
-    """Return True if *any* pattern fuzzy-matches inside text."""
+def fuzzy_any(text: str, patterns: list, max_distance: int = 2) -> bool:
     return any(fuzzy_contains(text, p, max_distance) for p in patterns)
 
 
-# ── System Prompt ──────────────────────────────────────────────────────────
-SYSTEM_PROMPT = """\
-You are CivicGuide AI — a beginner-friendly assistant that helps Indian citizens
-understand elections, civic processes, and voting.
+# ── Intent Classification ──────────────────────────────────────────────────
 
-## YOUR GOAL
-Be extremely concise and to the point. Answer directly without fluff. Make every response clear, structured, and easy to understand.
-
-## TYPO & MISSPELLING TOLERANCE
-- Users may type with spelling mistakes, abbreviations, or broken grammar.
-- ALWAYS interpret the user's *intent* even if the message is misspelled.
-- Silently correct and respond as if the message was perfectly spelled.
-
-## STRICT RESPONSE FORMAT
-Keep your answers brief. Only use the following sections if they are absolutely necessary to answer the question:
-
-**📋 Step-by-Step Process**
-- Only use if the user asks "How to..."
-- Max 3-4 short steps.
-
-**💡 Key Points to Remember**
-- Max 2-3 short bullets. Be very concise.
-
-**📄 Required Documents**
-- Only use if the user explicitly asks about documents or IDs.
-
-## TONE & STYLE RULES
-- Write like you're explaining to a first-time voter or a school student.
-- Use very short sentences.
-- Never write long paragraphs. Keep your total response under 100 words whenever possible.
-- Be warm, encouraging, and supportive.
-- Address the user by their first name when you know it.
-
-## ACCURACY
-- All information must be accurate for India's current election system.
-- Do not invent facts outside of the provided knowledge base.
-"""
-
-
-# ── Decision-Routing Patterns ──────────────────────────────────────────────
-# These patterns use fuzzy_any() for matching, so minor typos are tolerated.
-HOW_TO_VOTE_PATTERNS: list[str] = [
+HOW_TO_VOTE_PATTERNS = [
     "how to vote", "how do i vote", "how can i vote",
     "voting process", "how to cast", "cast my vote",
     "steps to vote", "voting steps", "voting procedure",
     "कैसे वोट", "वोट कैसे डालें",
 ]
 
-VAGUE_PATTERNS: list[str] = [
-    "tell me", "explain", "what about", "and", "also",
-    "give me info", "more info", "details", "information",
+ELIGIBILITY_PATTERNS = [
+    "am i eligible", "eligible to vote", "can i vote", "voting age",
+    "minimum age", "who can vote", "क्या मैं मतदान कर सकता",
+    "eligibility", "qualify", "allowed to vote",
 ]
 
-VAGUE_WORD_THRESHOLD: int = 6
+REGISTRATION_PATTERNS = [
+    "register", "registration", "form 6", "enroll", "voter id", "epic card",
+    "voter card", "nvsp", "voter helpline app", "blo", "booth level officer",
+    "पंजीकरण", "मतदाता पहचान",
+]
 
-SPECIFIC_KEYWORDS: list[str] = [
+DOCUMENTS_PATTERNS = [
+    "documents", "document", "proof", "aadhaar", "id card", "pan card",
+    "passport", "birth certificate", "what do i need", "required",
+    "दस्तावेज़", "पहचान पत्र",
+]
+
+BOOTH_PATTERNS = [
+    "polling booth", "polling station", "where to vote", "find booth",
+    "booth location", "nearest booth", "मतदान केंद्र",
+]
+
+COUNTING_PATTERNS = [
+    "counting", "result", "how are votes counted", "vote count",
+    "matha ganat", "मतगणना", "winner", "declaration",
+]
+
+VAGUE_PATTERNS = [
+    "tell me", "explain", "what about", "give me info", "more info",
+    "details", "information",
+]
+
+SENTIMENT_CONFUSED = [
+    "i don't understand", "confused", "not sure", "unclear",
+    "can you explain", "what does that mean", "i'm lost", "help me",
+    "समझ नहीं", "समझाइए",
+]
+
+SENTIMENT_FRUSTRATED = [
+    "this is wrong", "not working", "useless", "wrong answer",
+    "that's incorrect", "you are wrong", "bad answer",
+]
+
+SPECIFIC_KEYWORDS = [
     "register", "eligible", "booth", "id", "aadhaar", "epic",
     "nota", "evm", "commission", "lok sabha", "rajya sabha", "assembly",
     "voter", "vote", "election", "candidate", "ballot", "polling",
+    "mcc", "form 6", "form 8", "vvpat", "blo", "1950",
 ]
+
+VAGUE_WORD_THRESHOLD = 6
+
+
+# ── Intent → Follow-up Questions Mapping ──────────────────────────────────
+
+FOLLOWUP_MAP = {
+    "HOW_TO_VOTE": [
+        "What documents do I need at the polling booth?",
+        "How does the VVPAT machine work?",
+        "Can I vote without my Voter ID card?",
+    ],
+    "ELIGIBILITY": [
+        "How do I register to vote for the first time?",
+        "What is the minimum age to contest in elections?",
+        "Can NRIs vote in Indian elections?",
+    ],
+    "REGISTRATION": [
+        "What documents are needed for registration?",
+        "How do I check if my name is on the voter list?",
+        "How do I transfer my voter registration to a new city?",
+    ],
+    "DOCUMENTS": [
+        "Can I vote without a Voter ID card?",
+        "Is Aadhaar card alone sufficient to register?",
+        "How do I correct errors in my Voter ID card?",
+    ],
+    "BOOTH": [
+        "What happens at the polling booth step by step?",
+        "Can I vote at any booth or only mine?",
+        "What items are prohibited inside a polling booth?",
+    ],
+    "COUNTING": [
+        "When are election results usually announced?",
+        "Can a candidate challenge election results?",
+        "How are postal ballots counted?",
+    ],
+    "GENERAL": [
+        "What is NOTA and how does it work?",
+        "What is the Model Code of Conduct?",
+        "How does the EVM machine work?",
+    ],
+}
+
+
+def classify_intent(text: str) -> str:
+    """Classify the user's primary intent from the normalized message."""
+    if fuzzy_any(text, HOW_TO_VOTE_PATTERNS):
+        return "HOW_TO_VOTE"
+    if fuzzy_any(text, ELIGIBILITY_PATTERNS):
+        return "ELIGIBILITY"
+    if fuzzy_any(text, REGISTRATION_PATTERNS):
+        return "REGISTRATION"
+    if fuzzy_any(text, DOCUMENTS_PATTERNS):
+        return "DOCUMENTS"
+    if fuzzy_any(text, BOOTH_PATTERNS):
+        return "BOOTH"
+    if fuzzy_any(text, COUNTING_PATTERNS):
+        return "COUNTING"
+    return "GENERAL"
+
+
+def detect_sentiment(text: str) -> str:
+    """Detect if the user is confused or frustrated."""
+    if fuzzy_any(text, SENTIMENT_CONFUSED):
+        return "confused"
+    if fuzzy_any(text, SENTIMENT_FRUSTRATED):
+        return "frustrated"
+    return "neutral"
+
+
+# ── System Prompt ──────────────────────────────────────────────────────────
+SYSTEM_PROMPT = """\
+You are CivicGuide AI — a friendly, knowledgeable assistant that helps Indian
+citizens understand elections, civic processes, and voting rights.
+
+## CORE MISSION
+Help citizens participate in democracy confidently. Be accurate, concise, and
+empowering. Every answer should leave the user feeling informed and capable.
+
+## TYPO & MISSPELLING TOLERANCE
+- Silently interpret the user's *intent* even if the message contains typos
+  or broken grammar. Never mention spelling errors to the user.
+
+## STRICT RESPONSE FORMAT
+Keep answers brief (under 120 words). Use these sections only when needed:
+
+**📋 Step-by-Step Process**
+- Only for "How to…" questions. Max 4 short numbered steps.
+
+**💡 Key Points to Remember**
+- Max 3 concise bullets. Prefer this for factual answers.
+
+**📄 Required Documents**
+- Only when the user explicitly asks about documents.
+
+**🔗 Official Resource**
+- Include a link or reference (e.g., voters.eci.gov.in, Helpline 1950)
+  when it is directly useful. One reference maximum.
+
+## TONE & STYLE
+- Write like you're talking to a first-time voter or school student.
+- Use very short sentences. No jargon without explanation.
+- Be warm, encouraging, and supportive.
+- Address the user by first name when you know it.
+- If the user seems confused, briefly restate the key point more simply.
+- If the user seems frustrated, acknowledge it kindly before answering.
+
+## ACCURACY
+- All information must be accurate for India's current election system.
+- Do not invent facts outside the provided knowledge base.
+- If a question is outside your knowledge, say so honestly and direct the
+  user to voters.eci.gov.in or Voter Helpline 1950.
+
+## WHAT NOT TO DO
+- Do NOT recommend any political party or candidate.
+- Do NOT express personal political opinions.
+- Do NOT provide legal advice beyond general civic information.
+"""
 
 
 # ── Context Builders ───────────────────────────────────────────────────────
 
 def build_context_prefix(user_context: dict) -> str:
-    """
-    Build a plain-text block injected before the user's message so Gemini
-    can personalise responses based on who the user is.
-
-    Args:
-        user_context: Dict with optional keys: name (str), age (int|str),
-                      location (str).
-
-    Returns:
-        Multi-line context string, or empty string if context is empty.
-    """
     name     = user_context.get("name", "").strip()
     age_raw  = user_context.get("age")
     location = user_context.get("location", "").strip()
@@ -264,22 +332,12 @@ def build_context_prefix(user_context: dict) -> str:
     return "\n".join(lines)
 
 
-def build_decision_prefix(message: str, user_context: dict) -> str:
-    """
-    Inject conditional routing instructions before the user's question.
-
-    Uses fuzzy matching so typos like "how to vot", "regsiter", "eligble"
-    still trigger the correct decision route.
-
-    Rules:
-    1. How-to-vote gate — redirect under-age users to eligibility guidance.
-    2. Vague question gate — ask Gemini to request clarification first.
-    """
+def build_decision_prefix(message: str, user_context: dict, intent: str, sentiment: str) -> str:
     msg_normalized = normalize_message(message)
     instructions   = []
 
-    # Rule 1: How-to-vote eligibility gate (fuzzy)
-    if fuzzy_any(msg_normalized, HOW_TO_VOTE_PATTERNS):
+    # Intent-based instruction
+    if intent == "HOW_TO_VOTE":
         age = user_context.get("age") if user_context else None
         try:
             age_int = int(age) if age is not None else None
@@ -299,15 +357,39 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
                 "Provide the full step-by-step voting process in your structured format."
             )
 
-    # Rule 2: Vague question gate (fuzzy)
+    elif intent == "ELIGIBILITY":
+        instructions.append(
+            "[DECISION LOGIC] The user is asking about voting eligibility. "
+            "Answer based on their age/context. If under 18, explain kindly when they qualify."
+        )
+
+    elif intent == "REGISTRATION":
+        instructions.append(
+            "[DECISION LOGIC] The user is asking about voter registration. "
+            "Explain Form 6, the NVSP portal (voters.eci.gov.in), and the Voter Helpline App."
+        )
+
+    elif intent == "DOCUMENTS":
+        instructions.append(
+            "[DECISION LOGIC] The user is asking about required documents. "
+            "List the key proof-of-age and proof-of-address documents concisely."
+        )
+
+    elif intent == "BOOTH":
+        instructions.append(
+            "[DECISION LOGIC] The user is asking about polling booths. "
+            "Explain how to find their booth (voters.eci.gov.in or Helpline 1950) "
+            "and what happens at the booth on polling day."
+        )
+
+    # Vague question gate
     word_count           = len(message.split())
     is_short             = word_count <= VAGUE_WORD_THRESHOLD
     has_specific_keyword = fuzzy_any(msg_normalized, SPECIFIC_KEYWORDS)
-    is_how_to_vote_query = fuzzy_any(msg_normalized, HOW_TO_VOTE_PATTERNS)
 
     if (
         is_short
-        and not is_how_to_vote_query
+        and intent == "GENERAL"
         and not has_specific_keyword
         and fuzzy_any(msg_normalized, VAGUE_PATTERNS)
     ):
@@ -316,11 +398,22 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
             "Ask ONE specific clarifying question before answering."
         )
 
+    # Sentiment-based instruction
+    if sentiment == "confused":
+        instructions.append(
+            "[SENTIMENT] The user seems confused. Restate the key point more simply "
+            "and use a friendly, patient tone."
+        )
+    elif sentiment == "frustrated":
+        instructions.append(
+            "[SENTIMENT] The user seems frustrated. Start by acknowledging their frustration "
+            "briefly and warmly, then provide the correct information clearly."
+        )
+
     return "\n".join(instructions)
 
 
 def build_language_instruction(language: str) -> str:
-    """Return a prompt directive for the response language."""
     if language == "hindi":
         return (
             "[LANGUAGE] Respond entirely in Hindi (Devanagari script). "
@@ -329,6 +422,58 @@ def build_language_instruction(language: str) -> str:
     return ""
 
 
+# ── Local Fallback Agent (Offline Knowledge Search) ─────────────────────
+
+def local_agent_fallback(query: str, lang: str) -> str:
+    kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge.txt")
+    try:
+        with open(kb_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+    except Exception:
+        paragraphs = []
+
+    stopwords = {"how", "to", "what", "is", "the", "a", "an", "do", "i", "can", "in", "of", "for", "and"}
+    query_words = [w for w in re.findall(r'\w+', query.lower()) if w not in stopwords]
+
+    best_paras = []
+    if query_words and paragraphs:
+        scored_paras = []
+        for p in paragraphs:
+            p_lower = p.lower()
+            score = sum(p_lower.count(qw) for qw in query_words)
+            if score > 0:
+                scored_paras.append((score, p))
+        scored_paras.sort(key=lambda x: x[0], reverse=True)
+        best_paras = [p for score, p in scored_paras[:2]]
+
+    if not best_paras:
+        return (
+            "I am currently running in offline mode and couldn't find a specific answer "
+            "for your query in my local database.\n\n"
+            "**💡 What you can ask me right now:**\n"
+            "- How do I register to vote?\n"
+            "- What documents are required?\n"
+            "- Am I eligible to vote?\n"
+            "- What is NOTA?\n"
+            "- How does the EVM work?\n"
+        )
+
+    res = "Based on official guidelines, here is what you need to know:\n\n"
+    res += "**💡 Key Points to Remember**\n"
+    for para in best_paras:
+        first_sentence = para.split(". ")[0].strip()
+        if ":" in first_sentence:
+            title, desc = first_sentence.split(":", 1)
+            res += f"- **{title}**: {desc}.\n"
+        else:
+            res += f"- {first_sentence}.\n"
+
+    res += "\n**📋 Detailed Information**\n"
+    for para in best_paras:
+        res += f"{para}\n\n"
+
+    return res
 
 
 # ── Chat Endpoint ──────────────────────────────────────────────────────────
@@ -336,7 +481,7 @@ def build_language_instruction(language: str) -> str:
 @chat_bp.route("/chat", methods=["POST"])
 def chat():
     """
-    Process a chat message and return a Gemini AI response.
+    Stream a CivicGuide AI response.
 
     Request JSON:
     {
@@ -346,19 +491,16 @@ def chat():
         "language":     "english" | "hindi"             (optional)
     }
 
-    Response JSON (200):
-    { "reply": "...", "model": "gemini-2.5-flash", "language": "english" }
+    The response is a plain-text stream followed by a special JSON footer:
+        \\n\\n[SUGGESTIONS]{"suggestions": [...]}[/SUGGESTIONS]
 
-    Error JSON (400 / 500):
-    { "error": "..." }
+    The frontend strips this footer and uses it to render follow-up chips.
     """
     data = request.get_json(silent=True)
 
-    # ── Validate request body ──────────────────────────────────────────────
     if not data or "message" not in data:
         return error_response("Missing 'message' field in request body")
 
-    # ── Validate message ───────────────────────────────────────────────────
     user_message = data["message"].strip()
     if not user_message:
         return error_response("'message' cannot be empty")
@@ -368,7 +510,6 @@ def chat():
             f"(received {len(user_message)})"
         )
 
-    # ── Validate and sanitize history ──────────────────────────────────────
     raw_history = data.get("history", [])
     if not isinstance(raw_history, list):
         return error_response("'history' must be a list")
@@ -383,10 +524,15 @@ def chat():
         )
     ][-CHAT_MAX_HISTORY_TURNS:]
 
-    # ── Parse optional fields ──────────────────────────────────────────────
-    user_context = data.get("user_context") or {}
-    if not isinstance(user_context, dict):
-        user_context = {}
+    raw_context = data.get("user_context") or {}
+    if not isinstance(raw_context, dict):
+        raw_context = {}
+
+    user_context = {
+        "name":     str(raw_context.get("name", ""))[:60].strip(),
+        "age":      int(raw_context["age"]) if isinstance(raw_context.get("age"), (int, float)) and 0 <= raw_context["age"] <= 130 else None,
+        "location": str(raw_context.get("location", ""))[:80].strip(),
+    }
 
     language = data.get("language", "english")
     if not isinstance(language, str):
@@ -395,20 +541,23 @@ def chat():
     if language not in SUPPORTED_LANGUAGES:
         language = "english"
 
-    # ── Retrieve knowledge base context (RAG) ──────────────────────────────
-    # Use the normalized message for better embedding similarity on typos
-    normalized_for_rag = normalize_message(user_message)
-    retrieved_context  = retrieve(normalized_for_rag)
+    # ── Intent & Sentiment Classification ──────────────────────────────────
+    normalized_msg = normalize_message(user_message)
+    intent    = classify_intent(normalized_msg)
+    sentiment = detect_sentiment(normalized_msg)
+
+    # ── RAG Retrieval ───────────────────────────────────────────────────────
+    retrieved_context = retrieve(normalized_msg)
     knowledge_prefix = (
         f"[OFFICIAL KNOWLEDGE BASE]\n{retrieved_context}\n[END KNOWLEDGE BASE]\n"
-        "Use the official knowledge base above to answer the user's question accurately. "
-        "Do not invent facts outside of this knowledge base if the answer is contained within it."
+        "Use the official knowledge base above to answer accurately. "
+        "Do not invent facts outside of this knowledge base if the answer is within it."
     ) if retrieved_context else ""
 
-    # ── Build the augmented prompt ─────────────────────────────────────────
+    # ── Build Augmented Prompt ──────────────────────────────────────────────
     prompt_parts = filter(None, [
         build_context_prefix(user_context),
-        build_decision_prefix(user_message, user_context),
+        build_decision_prefix(user_message, user_context, intent, sentiment),
         build_language_instruction(language),
         knowledge_prefix,
         (
@@ -419,90 +568,32 @@ def chat():
     ])
     augmented_message = "\n".join(prompt_parts)
 
-    # ── Local Fallback Agent (Offline Knowledge Search) ───────────────────
-    def local_agent_fallback(query: str, lang: str) -> str:
-        import os
-        import re
-        from collections import Counter
-        
-        kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge.txt")
-        try:
-            with open(kb_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
-        except Exception:
-            paragraphs = []
-            
-        # Clean query: extract words, remove common stop words
-        stopwords = {"how", "to", "what", "is", "the", "a", "an", "do", "i", "can", "in", "of", "for", "and"}
-        query_words = [w for w in re.findall(r'\w+', query.lower()) if w not in stopwords]
-        
-        best_paras = []
-        if query_words and paragraphs:
-            # Score paragraphs based on matching keywords
-            scored_paras = []
-            for p in paragraphs:
-                p_lower = p.lower()
-                score = sum(p_lower.count(qw) for qw in query_words)
-                if score > 0:
-                    scored_paras.append((score, p))
-            
-            scored_paras.sort(key=lambda x: x[0], reverse=True)
-            best_paras = [p for score, p in scored_paras[:2]]
-        
-        # If no match or kb failed, use basic fallback
-        if not best_paras:
-            return (
-                "I am currently running in offline mode and couldn't find a specific answer for your query in my local database.\n\n"
-                "**💡 What you can ask me right now:**\n"
-                "- How do I register to vote?\n"
-                "- What documents are required?\n"
-                "- Am I eligible to vote?\n"
-                "- What is NOTA?\n"
-            )
+    # ── Determine follow-up suggestions ────────────────────────────────────
+    suggestions = FOLLOWUP_MAP.get(intent, FOLLOWUP_MAP["GENERAL"])
+    suggestions_footer = (
+        "\n\n[SUGGESTIONS]"
+        + json.dumps({"suggestions": suggestions})
+        + "[/SUGGESTIONS]"
+    )
 
-        # Build dynamic response mimicking the AI
-        res = "Based on official guidelines, here is what you need to know:\n\n"
-        
-        # Add a structured Key Points section dynamically based on the retrieved text
-        res += "**💡 Key Points to Remember**\n"
-        for i, para in enumerate(best_paras):
-            # Extract the title/first sentence
-            first_sentence = para.split(". ")[0].strip()
-            # Clean up title if it has a colon
-            if ":" in first_sentence:
-                title, desc = first_sentence.split(":", 1)
-                res += f"- **{title}**: {desc}.\n"
-            else:
-                res += f"- {first_sentence}.\n"
-        
-        res += "\n**📋 Detailed Information**\n"
-        for para in best_paras:
-            res += f"{para}\n\n"
-            
-        return res
-
-    # ── Call Groq API ───────────────────────────────
+    # ── Call Groq API ───────────────────────────────────────────────────────
     try:
         client = get_client()
-        
-        # Build standard messages array for Groq/OpenAI format
+
         groq_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        
-        # Add history
+
         for turn in history:
             role = "assistant" if turn["role"] == "model" else "user"
             groq_messages.append({"role": role, "content": turn["parts"][0]})
-            
-        # Add current augmented message
+
         groq_messages.append({"role": "user", "content": augmented_message})
 
         response_stream = client.chat.completions.create(
-            model=GROQ_MODEL,  # Default fast/free Groq model
+            model=GROQ_MODEL,
             messages=groq_messages,
-            temperature=0.7,
-            max_tokens=1024,
-            stream=True
+            temperature=0.65,
+            max_tokens=512,
+            stream=True,
         )
 
         def generate():
@@ -510,21 +601,71 @@ def chat():
                 for chunk in response_stream:
                     if chunk.choices[0].delta.content is not None:
                         yield chunk.choices[0].delta.content
+                # Append suggestions footer after AI text is done
+                yield suggestions_footer
             except Exception as e:
                 err_str = str(e)
+                logger.error("Streaming chunk error: %s", e, exc_info=True)
                 if "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
                     yield local_agent_fallback(user_message, language)
+                    yield suggestions_footer
                 else:
-                    yield f"\\n\\n[Error: {err_str}]"
-        
-        return Response(stream_with_context(generate()), mimetype='text/plain')
+                    yield "\n\nI encountered an issue generating a response. Please try again."
 
-    except Exception as exc:  
+        return Response(stream_with_context(generate()), mimetype="text/plain")
+
+    except Exception as exc:
         err_str = str(exc)
-        if "429" in err_str or "quota" in err_str.lower() or "GROQ_API_KEY" in err_str:
-            # Fallback for quota exhausted during setup or missing key
+        logger.error("Chat endpoint error: %s", exc, exc_info=True)
+        if (
+            "429" in err_str
+            or "quota" in err_str.lower()
+            or "GROQ_API_KEY" in err_str
+            or "api_key" in err_str.lower()
+        ):
             def generate_mock():
                 yield local_agent_fallback(user_message, language)
-            return Response(stream_with_context(generate_mock()), mimetype='text/plain')
-        
-        return error_response(f"AI service error: {exc}", status=500)
+                yield suggestions_footer
+            return Response(stream_with_context(generate_mock()), mimetype="text/plain")
+
+        return error_response(
+            "AI service is temporarily unavailable. Please try again shortly.", status=500
+        )
+
+
+# ── Feedback Endpoint ──────────────────────────────────────────────────────
+
+@chat_bp.route("/feedback", methods=["POST"])
+def feedback():
+    """
+    Record user feedback (thumbs up / thumbs down) on an AI response.
+
+    Request JSON:
+    {
+        "rating":   "up" | "down",          (required)
+        "message":  "The user's question",  (optional, for context)
+        "reply":    "The AI's answer",      (optional, for context)
+        "intent":   "HOW_TO_VOTE",          (optional)
+    }
+
+    Response JSON (200):
+    { "ok": true }
+    """
+    data = request.get_json(silent=True)
+    if not data:
+        return error_response("Missing request body")
+
+    rating = data.get("rating", "").strip().lower()
+    if rating not in ("up", "down"):
+        return error_response("'rating' must be 'up' or 'down'")
+
+    # Log feedback for analysis — no DB needed for now
+    logger.info(
+        "FEEDBACK rating=%s | intent=%s | message=%.80s | reply=%.80s",
+        rating,
+        data.get("intent", "unknown"),
+        data.get("message", "")[:80],
+        data.get("reply", "")[:80],
+    )
+
+    return jsonify({"ok": True})

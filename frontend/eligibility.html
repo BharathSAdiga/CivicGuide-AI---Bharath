@@ -12,12 +12,12 @@
   <!-- Navbar -->
   <nav class="navbar">
     <a href="index.html" class="navbar-brand">
-      <div class="brand-icon">🏛️</div>
+      <div class="brand-icon" aria-hidden="true">🏛️</div>
       <span class="brand-name">CivicGuide AI</span>
     </a>
     <ul class="navbar-links">
       <li><a href="index.html">Home</a></li>
-      <li><a href="eligibility.html" class="active">Eligibility</a></li>
+      <li><a href="eligibility.html" class="active" aria-current="page">Eligibility</a></li>
       <li><a href="timeline.html">Timeline</a></li>
       <li><a href="booths.html">Find Booth</a></li>
       <li><a href="chat.html">Assistant</a></li>
@@ -27,7 +27,7 @@
         <span class="icon-sun">☀️</span>
         <span class="icon-moon">🌙</span>
       </button>
-      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu" aria-expanded="false">☰</button>
     </div>
   </nav>
 
@@ -85,7 +85,7 @@
                 checked
               />
               <label for="citizen-yes">
-                <span class="pill-icon">🇮🇳</span>
+                <span class="pill-icon" aria-hidden="true">🇮🇳</span>
                 <span class="pill-label">Indian Citizen</span>
               </label>
             </div>
@@ -98,7 +98,7 @@
                 value="non-indian"
               />
               <label for="citizen-no">
-                <span class="pill-icon">🌍</span>
+                <span class="pill-icon" aria-hidden="true">🌍</span>
                 <span class="pill-label">Non-Indian / NRI</span>
               </label>
             </div>
@@ -119,7 +119,7 @@
 
       <!-- Empty State -->
       <div class="result-empty" id="result-empty">
-        <div class="result-empty-icon">📋</div>
+        <div class="result-empty-icon" aria-hidden="true">📋</div>
         <h3>Your result will appear here</h3>
         <p>Fill in your details on the left and click "Check Eligibility".</p>
       </div>
@@ -130,7 +130,7 @@
         <!-- Status Banner -->
         <div class="result-banner" id="result-banner">
           <div class="result-status-row">
-            <div class="result-icon" id="result-icon">✅</div>
+            <div class="result-icon" id="result-icon" aria-hidden="true">✅</div>
             <div>
               <div class="result-verdict" id="result-verdict">Eligible to Vote</div>
             </div>
@@ -165,22 +165,22 @@
   <!-- Info Cards -->
   <section class="info-section" aria-label="Eligibility information">
     <div class="info-card">
-      <div class="info-icon">🎂</div>
+      <div class="info-icon" aria-hidden="true">🎂</div>
       <h3>Minimum Age: 18</h3>
       <p>You must be at least 18 years old on the qualifying date (1st January of the year) to register as a voter.</p>
     </div>
     <div class="info-card">
-      <div class="info-icon">🇮🇳</div>
+      <div class="info-icon" aria-hidden="true">🇮🇳</div>
       <h3>Indian Citizenship</h3>
       <p>Only Indian citizens can vote in Indian elections. NRIs with valid Indian passports may register under special provisions.</p>
     </div>
     <div class="info-card">
-      <div class="info-icon">📋</div>
+      <div class="info-icon" aria-hidden="true">📋</div>
       <h3>Electoral Roll</h3>
       <p>Even if eligible, your name must appear on the Electoral Roll. Register using Form 6 at voters.eci.gov.in.</p>
     </div>
     <div class="info-card">
-      <div class="info-icon">🚫</div>
+      <div class="info-icon" aria-hidden="true">🚫</div>
       <h3>Disqualifications</h3>
       <p>You may be disqualified if declared of unsound mind by a court, or convicted of certain offences. Check ECI guidelines.</p>
     </div>

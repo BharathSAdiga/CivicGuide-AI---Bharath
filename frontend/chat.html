@@ -16,7 +16,7 @@
 <div class="modal-overlay" id="onboarding-modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
   <div class="modal-card">
 
-    <div class="modal-icon">🗳️</div>
+    <div class="modal-icon" aria-hidden="true">🗳️</div>
     <h2 class="modal-title" id="modal-title">Welcome to CivicGuide AI</h2>
     <p class="modal-subtitle">
       Tell us a little about yourself so we can give you personalised guidance
@@ -88,7 +88,7 @@
   <!-- ── Sidebar ──────────────────────────────────────── -->
   <aside class="sidebar">
     <a href="index.html" class="sidebar-brand">
-      <div class="brand-icon">🏛️</div>
+      <div class="brand-icon" aria-hidden="true">🏛️</div>
       <span class="brand-name">CivicGuide AI</span>
     </a>
 
@@ -106,7 +106,7 @@
 
     <!-- Eligibility Badge -->
     <div class="eligibility-badge" id="eligibility-badge" hidden>
-      <span id="eligibility-icon">✅</span>
+      <span id="eligibility-icon" aria-hidden="true">✅</span>
       <span id="eligibility-text">Eligible to Vote</span>
     </div>
 
@@ -118,20 +118,20 @@
 
     <span class="sidebar-section-label">Features</span>
     <div class="quick-topics">
-      <a href="chat.html" class="topic-btn active" style="text-decoration:none;">
-        <span class="topic-icon">💬</span> Chat
+      <a href="chat.html" class="topic-btn active" style="text-decoration:none;" aria-current="page">
+        <span class="topic-icon" aria-hidden="true">💬</span> Chat
       </a>
       <a href="eligibility.html" class="topic-btn" style="text-decoration:none;">
-        <span class="topic-icon">✅</span> Eligibility
+        <span class="topic-icon" aria-hidden="true">✅</span> Eligibility
       </a>
       <a href="timeline.html" class="topic-btn" style="text-decoration:none;">
-        <span class="topic-icon">📅</span> Timeline
+        <span class="topic-icon" aria-hidden="true">📅</span> Timeline
       </a>
       <a href="booths.html" class="topic-btn" style="text-decoration:none;">
-        <span class="topic-icon">🗺️</span> Booth Finder
+        <span class="topic-icon" aria-hidden="true">🗺️</span> Booth Finder
       </a>
       <button class="topic-btn" data-q="What documents are needed to vote?">
-        <span class="topic-icon">📄</span> Documents
+        <span class="topic-icon" aria-hidden="true">📄</span> Documents
       </button>
     </div>
 
@@ -140,18 +140,21 @@
 
     <div class="quick-topics">
       <button class="topic-btn" data-q="What is the election process in India?">
-        <span class="topic-icon">🗳️</span> Election Process
+        <span class="topic-icon" aria-hidden="true">🗳️</span> Election Process
       </button>
       <button class="topic-btn" data-q="How do I register to vote in India?">
-        <span class="topic-icon">📋</span> Voter Registration
+        <span class="topic-icon" aria-hidden="true">📋</span> Voter Registration
       </button>
       <button class="topic-btn" data-q="How does vote counting work in India?">
-        <span class="topic-icon">🔢</span> Vote Counting
+        <span class="topic-icon" aria-hidden="true">🔢</span> Vote Counting
       </button>
     </div>
 
     <div class="sidebar-footer">
       <div class="sidebar-divider"></div>
+      <button class="export-btn" id="export-btn" aria-label="Export chat transcript">
+        💾 Export Chat
+      </button>
       <a href="index.html">🏠 Home</a>
     </div>
   </aside>
@@ -163,7 +166,7 @@
     <header class="chat-header">
       <div class="chat-header-info">
         <h1>Election Process Assistant</h1>
-        <p>Powered by Google Gemini · India Civic AI</p>
+        <p>Powered by Groq Llama · India Civic AI</p>
       </div>
       <div style="display:flex;align-items:center;gap:1rem;">
         <!-- Theme Toggle -->
@@ -188,7 +191,7 @@
 
       <!-- Welcome State (hidden once chat starts) -->
       <div class="welcome-state" id="welcome-state">
-        <div class="welcome-icon">🗳️</div>
+        <div class="welcome-icon" aria-hidden="true">🗳️</div>
         <h2 id="welcome-heading">How can I help you today?</h2>
         <p id="welcome-sub">
           Ask me anything about the Indian election process —
@@ -204,7 +207,7 @@
 
         <!-- Booth Finder Card -->
         <div class="booth-finder-card" id="booth-finder-card">
-          <div class="booth-finder-icon">📍</div>
+          <div class="booth-finder-icon" aria-hidden="true">📍</div>
           <div class="booth-finder-body">
             <h3>Find Nearby Voting Booths</h3>
             <p>Use your location to find the nearest polling stations on Google Maps</p>
@@ -216,6 +219,11 @@
         </div>
       </div>
 
+    </div>
+
+    <!-- Stop Generation -->
+    <div style="text-align:center;padding:0.4rem 2rem 0;">
+      <button class="stop-btn" id="stop-btn" aria-label="Stop generating response">⏹ Stop Generating</button>
     </div>
 
     <!-- Input -->
