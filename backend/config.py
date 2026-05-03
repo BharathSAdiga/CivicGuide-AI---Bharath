@@ -12,9 +12,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-# ── Gemini AI ─────────────────────────────────────────────────────────────
-GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL:   str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+# ── Groq AI ─────────────────────────────────────────────────────────────
+GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+GROQ_MODEL:   str = os.getenv("GROQ_MODEL", "llama-3.1-8b-instant")
 
 # ── Server ────────────────────────────────────────────────────────────────
 FLASK_HOST:  str = os.getenv("FLASK_HOST", "0.0.0.0")

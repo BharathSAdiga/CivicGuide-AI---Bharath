@@ -59,9 +59,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const navbar = document.querySelector('.navbar');
   window.addEventListener('scroll', () => {
     if (window.scrollY > 60) {
-      navbar.style.background = 'rgba(10, 14, 26, 0.96)';
+      navbar.style.background = 'var(--bg-elevated)';
+      navbar.style.boxShadow = 'var(--shadow-sm)';
     } else {
-      navbar.style.background = 'rgba(10, 14, 26, 0.8)';
+      navbar.style.background = 'transparent';
+      navbar.style.boxShadow = 'none';
     }
   }, { passive: true });
 
@@ -75,6 +77,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     });
   });
+
+  // ─── Mobile Menu Toggle ──────────────────────────────
+  const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+  const navLinks = document.querySelector('.navbar-links');
+  if (mobileMenuBtn && navLinks) {
+    mobileMenuBtn.addEventListener('click', () => {
+      navLinks.classList.toggle('open');
+      mobileMenuBtn.textContent = navLinks.classList.contains('open') ? '✕' : '☰';
+    });
+    // Close on link click
+    navLinks.querySelectorAll('a').forEach(link => {
+      link.addEventListener('click', () => {
+        navLinks.classList.remove('open');
+        mobileMenuBtn.textContent = '☰';
+      });
+    });
+  }
 
   // ─── API Status Ping ──────────────────────────────────
   const API_BASE = window.CIVICGUIDE_API_BASE || 'http://127.0.0.1:5000';

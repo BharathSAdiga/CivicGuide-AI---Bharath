@@ -22,6 +22,13 @@
       <li><a href="booths.html">Find Booth</a></li>
       <li><a href="chat.html">Assistant</a></li>
     </ul>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <span class="icon-sun">☀️</span>
+        <span class="icon-moon">🌙</span>
+      </button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+    </div>
   </nav>
 
   <!-- Page Header -->
@@ -39,6 +46,7 @@
     </p>
   </header>
 
+  <main>
   <!-- Election Type Selector -->
   <div class="type-selector" id="type-selector" role="group" aria-label="Election type">
     <button class="type-btn active" data-type="lok_sabha"       id="btn-lok_sabha">🇮🇳 Lok Sabha</button>
@@ -107,7 +115,10 @@
     <ol class="timeline" id="timeline" aria-label="Election phases" style="display:none;"></ol>
 
   </div>
+  </main>
 
+  <script src="js/main.js"></script>
+  <script src="js/theme.js"></script>
   <script type="module" src="js/timeline.js"></script>
   <script type="module" src="js/calendar.js"></script>
 </body>

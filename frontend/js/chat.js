@@ -407,8 +407,54 @@ const BOOTH_KEYWORDS = [
   "polling booth", "polling station", "voting booth", "voting centre",
   "voting center", "nearest booth", "find your booth", "booths near",
   "polling place", "where to vote", "locate booth", "booth finder",
-  "voterportal", "polling day",
+  "voterportal", "polling day", "booth", "polling",
 ];
+
+/**
+ * Simple Levenshtein edit distance for fuzzy matching on the frontend.
+ * @param {string} a
+ * @param {string} b
+ * @returns {number}
+ */
+function editDistance(a, b) {
+  if (a.length < b.length) return editDistance(b, a);
+  if (b.length === 0) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 0; i < a.length; i++) {
+    const curr = [i + 1];
+    for (let j = 0; j < b.length; j++) {
+      curr.push(Math.min(
+        prev[j + 1] + 1,
+        curr[j] + 1,
+        prev[j] + (a[i] === b[j] ? 0 : 1)
+      ));
+    }
+    prev = curr;
+  }
+  return prev[b.length];
+}
+
+/**
+ * Check if a keyword fuzzy-matches anywhere inside text.
+ * Allows up to `maxDist` edits. Short keywords (<=3 chars) require exact match.
+ * @param {string} text     - Lowercased haystack.
+ * @param {string} keyword  - Lowercased needle.
+ * @param {number} maxDist  - Max edit distance allowed.
+ * @returns {boolean}
+ */
+function fuzzyIncludes(text, keyword, maxDist = 2) {
+  if (text.includes(keyword)) return true;
+  if (keyword.length <= 3) return false;
+  const kLen = keyword.length;
+  for (let ws = Math.max(1, kLen - 1); ws <= kLen + 1; ws++) {
+    for (let i = 0; i <= text.length - ws; i++) {
+      const window = text.slice(i, i + ws);
+      const allowed = kLen >= 8 ? maxDist : Math.min(maxDist, Math.max(1, Math.floor(kLen / 4)));
+      if (editDistance(window, keyword) <= allowed) return true;
+    }
+  }
+  return false;
+}
 
 /**
  * Open Google Maps searching for polling stations near the given coordinates.
@@ -439,13 +485,14 @@ function buildMapsLinkHTML() {
 /**
  * Check if the AI response mentions polling booths, and if so,
  * append a clickable Google Maps link card to the AI bubble.
+ * Uses fuzzy matching so typos like "poling booth" still trigger the card.
  *
  * @param {string}      aiText     - The full AI response text.
  * @param {HTMLElement} msgWrapper - The .message wrapper element.
  */
 function maybeInjectBoothLink(aiText, msgWrapper) {
   const lower = aiText.toLowerCase();
-  const isBooth = BOOTH_KEYWORDS.some((kw) => lower.includes(kw));
+  const isBooth = BOOTH_KEYWORDS.some((kw) => fuzzyIncludes(lower, kw));
   if (!isBooth) return;
 
   const bubble = msgWrapper.querySelector(".bubble");

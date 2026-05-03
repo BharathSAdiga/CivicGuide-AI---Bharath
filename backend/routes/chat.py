@@ -21,14 +21,22 @@ Design decisions
   than a separate translation API call, keeping latency low.
 - History is converted from [{role, parts}] Gemini format to the Content list
   format expected by the new SDK before each call.
+- Fuzzy matching is applied to keyword detection so users with typos (e.g.
+  "how to vot", "regsiter", "eligble") are still routed correctly.
 """
 
-from google import genai
-from google.genai import types
+import re
+import unicodedata
+
+try:
+    from groq import Groq
+except ImportError:
+    Groq = None
+
 from flask import Blueprint, request, Response, stream_with_context
 
 from config import (
-    GEMINI_API_KEY, GEMINI_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES,
+    GROQ_API_KEY, GROQ_MODEL, VOTING_AGE, SUPPORTED_LANGUAGES,
     CHAT_MAX_MESSAGE_LENGTH, CHAT_MAX_HISTORY_TURNS,
 )
 from utils import error_response, success_response
@@ -37,28 +45,108 @@ from rag import retrieve
 chat_bp = Blueprint("chat", __name__)
 
 
-# ── Gemini Client (module-level singleton) ─────────────────────────────────
-# Initialised once; reused across all requests in this process.
-# Will be None if GEMINI_API_KEY is missing — checked at request time.
-_client: genai.Client | None = None
+# ── Groq Client (module-level singleton) ─────────────────────────────────
+_client = None
 
-
-def get_client() -> genai.Client:
+def get_client():
     """
-    Return the module-level Gemini client, creating it on first call.
-
-    Raises:
-        EnvironmentError: If GEMINI_API_KEY is missing or empty.
+    Return the module-level Groq client.
     """
     global _client
     if _client is None:
-        if not GEMINI_API_KEY:
-            raise EnvironmentError(
-                "GEMINI_API_KEY is not set. "
-                "Add it to backend/.env or your environment variables."
-            )
-        _client = genai.Client(api_key=GEMINI_API_KEY)
+        import os
+        groq_key = os.getenv("GROQ_API_KEY", "")
+        if not groq_key:
+            raise EnvironmentError("GROQ_API_KEY is not set.")
+        if Groq is None:
+            raise ImportError("groq python package is not installed.")
+        _client = Groq(api_key=groq_key)
     return _client
+
+
+# ── Typo-Tolerant Fuzzy Matching ───────────────────────────────────────────
+
+def _edit_distance(s1: str, s2: str) -> int:
+    """
+    Compute the Levenshtein edit distance between two strings.
+    Used for fuzzy keyword matching to tolerate user typos.
+    """
+    if len(s1) < len(s2):
+        return _edit_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+
+    prev_row = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr_row = [i + 1]
+        for j, c2 in enumerate(s2):
+            # Substitution, insertion, deletion
+            curr_row.append(min(
+                prev_row[j + 1] + 1,
+                curr_row[j] + 1,
+                prev_row[j] + (0 if c1 == c2 else 1),
+            ))
+        prev_row = curr_row
+    return prev_row[-1]
+
+
+def normalize_message(text: str) -> str:
+    """
+    Normalize user input for more reliable pattern matching.
+
+    - Lowercases
+    - Strips accents / diacritics (e.g. résumé → resume)
+    - Collapses multiple spaces / punctuation runs into single space
+    - Removes leading/trailing whitespace
+    """
+    text = text.lower().strip()
+    # Strip Unicode accents (keeps Devanagari intact)
+    nfkd = unicodedata.normalize("NFKD", text)
+    text = "".join(c for c in nfkd if not unicodedata.combining(c))
+    # Collapse whitespace & strip stray punctuation between words
+    text = re.sub(r"[\s]+", " ", text)
+    return text
+
+
+def fuzzy_contains(haystack: str, needle: str, max_distance: int = 2) -> bool:
+    """
+    Check if *needle* appears anywhere inside *haystack* with at most
+    *max_distance* character edits (Levenshtein distance).
+
+    Works on a sliding-window basis: for each window of len(needle)±1
+    characters in haystack, we check the edit distance.
+
+    Short needles (≤3 chars) require exact match to avoid false positives.
+    """
+    if not needle or not haystack:
+        return False
+
+    # Exact match fast path
+    if needle in haystack:
+        return True
+
+    # Short keywords must match exactly to avoid false positives
+    if len(needle) <= 3:
+        return False
+
+    # Sliding window fuzzy search
+    n_len = len(needle)
+    for window_size in range(max(1, n_len - 1), n_len + 2):
+        for i in range(len(haystack) - window_size + 1):
+            window = haystack[i : i + window_size]
+            dist = _edit_distance(window, needle)
+            # Scale max allowed distance: longer words tolerate more errors
+            allowed = min(max_distance, max(1, n_len // 4))
+            if n_len >= 8:
+                allowed = max_distance  # full tolerance for long patterns
+            if dist <= allowed:
+                return True
+    return False
+
+
+def fuzzy_any(text: str, patterns: list[str], max_distance: int = 2) -> bool:
+    """Return True if *any* pattern fuzzy-matches inside text."""
+    return any(fuzzy_contains(text, p, max_distance) for p in patterns)
 
 
 # ── System Prompt ──────────────────────────────────────────────────────────
@@ -69,6 +157,23 @@ understand elections, civic processes, and voting.
 ## YOUR GOAL
 Make every response clear, structured, and easy to understand — even for someone
 who has never voted before or knows nothing about elections.
+
+## TYPO & MISSPELLING TOLERANCE
+- Users may type with spelling mistakes, abbreviations, or broken grammar.
+- ALWAYS interpret the user's *intent* even if the message is misspelled.
+  Examples:
+    - "how to vot" → "how to vote"
+    - "eligble" or "eligibal" → "eligible"
+    - "regsiter" or "registar" → "register"
+    - "votr id" or "voter i d" → "voter ID"
+    - "adhar" or "adhar card" → "Aadhaar card"
+    - "lok shaba" → "Lok Sabha"
+    - "rajya shaba" → "Rajya Sabha"
+    - "evm masheen" → "EVM machine"
+    - "pols booth" or "poling booth" → "polling booth"
+    - "wht documents" → "what documents"
+- Never ask the user to re-type their question due to spelling errors.
+- Silently correct and respond as if the message was perfectly spelled.
 
 ## STRICT RESPONSE FORMAT
 Always structure your response using the following sections (only include sections
@@ -105,6 +210,7 @@ that are relevant to the question):
 
 
 # ── Decision-Routing Patterns ──────────────────────────────────────────────
+# These patterns use fuzzy_any() for matching, so minor typos are tolerated.
 HOW_TO_VOTE_PATTERNS: list[str] = [
     "how to vote", "how do i vote", "how can i vote",
     "voting process", "how to cast", "cast my vote",
@@ -119,10 +225,11 @@ VAGUE_PATTERNS: list[str] = [
 
 VAGUE_WORD_THRESHOLD: int = 6
 
-SPECIFIC_KEYWORDS: frozenset[str] = frozenset([
+SPECIFIC_KEYWORDS: list[str] = [
     "register", "eligible", "booth", "id", "aadhaar", "epic",
     "nota", "evm", "commission", "lok sabha", "rajya sabha", "assembly",
-])
+    "voter", "vote", "election", "candidate", "ballot", "polling",
+]
 
 
 # ── Context Builders ───────────────────────────────────────────────────────
@@ -182,15 +289,18 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
     """
     Inject conditional routing instructions before the user's question.
 
+    Uses fuzzy matching so typos like "how to vot", "regsiter", "eligble"
+    still trigger the correct decision route.
+
     Rules:
     1. How-to-vote gate — redirect under-age users to eligibility guidance.
     2. Vague question gate — ask Gemini to request clarification first.
     """
-    msg_lower    = message.lower()
-    instructions = []
+    msg_normalized = normalize_message(message)
+    instructions   = []
 
-    # Rule 1: How-to-vote eligibility gate
-    if any(pattern in msg_lower for pattern in HOW_TO_VOTE_PATTERNS):
+    # Rule 1: How-to-vote eligibility gate (fuzzy)
+    if fuzzy_any(msg_normalized, HOW_TO_VOTE_PATTERNS):
         age = user_context.get("age") if user_context else None
         try:
             age_int = int(age) if age is not None else None
@@ -210,17 +320,17 @@ def build_decision_prefix(message: str, user_context: dict) -> str:
                 "Provide the full step-by-step voting process in your structured format."
             )
 
-    # Rule 2: Vague question gate
+    # Rule 2: Vague question gate (fuzzy)
     word_count           = len(message.split())
     is_short             = word_count <= VAGUE_WORD_THRESHOLD
-    has_specific_keyword = any(kw in msg_lower for kw in SPECIFIC_KEYWORDS)
-    is_how_to_vote_query = any(p in msg_lower for p in HOW_TO_VOTE_PATTERNS)
+    has_specific_keyword = fuzzy_any(msg_normalized, SPECIFIC_KEYWORDS)
+    is_how_to_vote_query = fuzzy_any(msg_normalized, HOW_TO_VOTE_PATTERNS)
 
     if (
         is_short
         and not is_how_to_vote_query
         and not has_specific_keyword
-        and any(p in msg_lower for p in VAGUE_PATTERNS)
+        and fuzzy_any(msg_normalized, VAGUE_PATTERNS)
     ):
         instructions.append(
             "[DECISION LOGIC] The user's question is vague or incomplete. "
@@ -240,24 +350,6 @@ def build_language_instruction(language: str) -> str:
     return ""
 
 
-def history_to_contents(history: list[dict]) -> list[types.Content]:
-    """
-    Convert the [{role, parts: [str]}] history format stored client-side
-    into the list[types.Content] format required by the new google.genai SDK.
-
-    Args:
-        history: List of turn dicts already sanitized and capped by the endpoint.
-
-    Returns:
-        List of types.Content objects ready to pass to client.chats.create().
-    """
-    contents = []
-    for turn in history:
-        role  = turn["role"]   # "user" | "model"
-        parts = [types.Part.from_text(text=p) for p in turn["parts"] if isinstance(p, str)]
-        if parts:
-            contents.append(types.Content(role=role, parts=parts))
-    return contents
 
 
 # ── Chat Endpoint ──────────────────────────────────────────────────────────
@@ -325,7 +417,9 @@ def chat():
         language = "english"
 
     # ── Retrieve knowledge base context (RAG) ──────────────────────────────
-    retrieved_context = retrieve(user_message)
+    # Use the normalized message for better embedding similarity on typos
+    normalized_for_rag = normalize_message(user_message)
+    retrieved_context  = retrieve(normalized_for_rag)
     knowledge_prefix = (
         f"[OFFICIAL KNOWLEDGE BASE]\n{retrieved_context}\n[END KNOWLEDGE BASE]\n"
         "Use the official knowledge base above to answer the user's question accurately. "
@@ -338,36 +432,120 @@ def chat():
         build_decision_prefix(user_message, user_context),
         build_language_instruction(language),
         knowledge_prefix,
-        f"User question: {user_message}",
+        (
+            f"[TYPO NOTICE] The user's original message is shown below. "
+            f"It may contain spelling mistakes — interpret the intent, not the literal text.\n"
+            f"User question: {user_message}"
+        ),
     ])
     augmented_message = "\n".join(prompt_parts)
 
-    # ── Call Gemini via new google.genai SDK ───────────────────────────────
+    # ── Local Fallback Agent (Offline Knowledge Search) ───────────────────
+    def local_agent_fallback(query: str, lang: str) -> str:
+        import os
+        import re
+        from collections import Counter
+        
+        kb_path = os.path.join(os.path.dirname(__file__), "..", "knowledge.txt")
+        try:
+            with open(kb_path, "r", encoding="utf-8") as f:
+                content = f.read()
+            paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+        except Exception:
+            paragraphs = []
+            
+        # Clean query: extract words, remove common stop words
+        stopwords = {"how", "to", "what", "is", "the", "a", "an", "do", "i", "can", "in", "of", "for", "and"}
+        query_words = [w for w in re.findall(r'\w+', query.lower()) if w not in stopwords]
+        
+        best_paras = []
+        if query_words and paragraphs:
+            # Score paragraphs based on matching keywords
+            scored_paras = []
+            for p in paragraphs:
+                p_lower = p.lower()
+                score = sum(p_lower.count(qw) for qw in query_words)
+                if score > 0:
+                    scored_paras.append((score, p))
+            
+            scored_paras.sort(key=lambda x: x[0], reverse=True)
+            best_paras = [p for score, p in scored_paras[:2]]
+        
+        # If no match or kb failed, use basic fallback
+        if not best_paras:
+            return (
+                "I am currently running in offline mode and couldn't find a specific answer for your query in my local database.\n\n"
+                "**💡 What you can ask me right now:**\n"
+                "- How do I register to vote?\n"
+                "- What documents are required?\n"
+                "- Am I eligible to vote?\n"
+                "- What is NOTA?\n"
+            )
+
+        # Build dynamic response mimicking the AI
+        res = "Based on official guidelines, here is what you need to know:\n\n"
+        
+        # Add a structured Key Points section dynamically based on the retrieved text
+        res += "**💡 Key Points to Remember**\n"
+        for i, para in enumerate(best_paras):
+            # Extract the title/first sentence
+            first_sentence = para.split(". ")[0].strip()
+            # Clean up title if it has a colon
+            if ":" in first_sentence:
+                title, desc = first_sentence.split(":", 1)
+                res += f"- **{title}**: {desc}.\n"
+            else:
+                res += f"- {first_sentence}.\n"
+        
+        res += "\n**📋 Detailed Information**\n"
+        for para in best_paras:
+            res += f"{para}\n\n"
+            
+        return res
+
+    # ── Call Groq API ───────────────────────────────
     try:
-        client  = get_client()
-        session = client.chats.create(
-            model=GEMINI_MODEL,
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
-                temperature=0.7,
-                max_output_tokens=1024,
-            ),
-            history=history_to_contents(history),
+        client = get_client()
+        
+        # Build standard messages array for Groq/OpenAI format
+        groq_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        
+        # Add history
+        for turn in history:
+            role = "assistant" if turn["role"] == "model" else "user"
+            groq_messages.append({"role": role, "content": turn["parts"][0]})
+            
+        # Add current augmented message
+        groq_messages.append({"role": "user", "content": augmented_message})
+
+        response_stream = client.chat.completions.create(
+            model=GROQ_MODEL,  # Default fast/free Groq model
+            messages=groq_messages,
+            temperature=0.7,
+            max_tokens=1024,
+            stream=True
         )
-        response_stream = session.send_message_stream(augmented_message)
 
         def generate():
             try:
                 for chunk in response_stream:
-                    if chunk.text:
-                        yield chunk.text
+                    if chunk.choices[0].delta.content is not None:
+                        yield chunk.choices[0].delta.content
             except Exception as e:
-                yield f"\\n\\n[Error: {str(e)}]"
+                err_str = str(e)
+                if "429" in err_str or "quota" in err_str.lower() or "limit" in err_str.lower():
+                    yield local_agent_fallback(user_message, language)
+                else:
+                    yield f"\\n\\n[Error: {err_str}]"
         
         return Response(stream_with_context(generate()), mimetype='text/plain')
 
-    except EnvironmentError as exc:
-        return error_response(str(exc), status=500)
-
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  
+        err_str = str(exc)
+        if "429" in err_str or "quota" in err_str.lower() or "GROQ_API_KEY" in err_str:
+            # Fallback for quota exhausted during setup or missing key
+            def generate_mock():
+                yield local_agent_fallback(user_message, language)
+            return Response(stream_with_context(generate_mock()), mimetype='text/plain')
+        
         return error_response(f"AI service error: {exc}", status=500)

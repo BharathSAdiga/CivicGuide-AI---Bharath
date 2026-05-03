@@ -27,7 +27,7 @@ echo.
 :: ── Check for .env / API key ────────────────────────────
 if not exist "%~dp0backend\.env" (
     echo [WARN] No .env file found in backend\
-    echo        Create backend\.env with:  GEMINI_API_KEY=your_key_here
+    echo        Create backend\.env with:  GROQ_API_KEY=your_key_here
     echo        Chat will not work without it.
     echo.
 )

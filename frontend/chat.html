@@ -167,6 +167,11 @@
         <p>Powered by Google Gemini · India Civic AI</p>
       </div>
       <div style="display:flex;align-items:center;gap:1rem;">
+        <!-- Theme Toggle -->
+        <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+          <span class="icon-sun">☀️</span>
+          <span class="icon-moon">🌙</span>
+        </button>
         <!-- Language Toggle -->
         <div class="lang-toggle" id="lang-toggle" role="group" aria-label="Response language">
           <button class="lang-btn active" data-lang="english" id="lang-en">EN</button>
@@ -235,6 +240,7 @@
   </main>
 </div>
 
+<script src="js/theme.js"></script>
 <script type="module" src="js/chat.js"></script>
 </body>
 </html>

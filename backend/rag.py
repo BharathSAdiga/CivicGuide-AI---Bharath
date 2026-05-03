@@ -1,25 +1,29 @@
 import os
 import math
 import logging
-from google import genai
-from config import GEMINI_API_KEY
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError:
+    SentenceTransformer = None
 
 logger = logging.getLogger(__name__)
 
 # Module-level cache
 _chunks = []
 _embeddings = []
-_client = None
+_embed_model = None
 
-def get_client() -> genai.Client:
-    global _client
-    if _client is None:
-        if not GEMINI_API_KEY:
-            raise EnvironmentError("GEMINI_API_KEY is not set.")
-        _client = genai.Client(api_key=GEMINI_API_KEY)
-    return _client
+def get_embed_model():
+    global _embed_model
+    if _embed_model is None:
+        if SentenceTransformer is None:
+            logger.warning("sentence-transformers not installed. RAG will not work.")
+            return None
+        # all-MiniLM-L6-v2 is ultra-lightweight (80MB) and fast on CPU
+        _embed_model = SentenceTransformer('all-MiniLM-L6-v2')
+    return _embed_model
 
-def cosine_similarity(v1: list[float], v2: list[float]) -> float:
+def cosine_similarity(v1, v2) -> float:
     dot = sum(a * b for a, b in zip(v1, v2))
     norm1 = math.sqrt(sum(a * a for a in v1))
     norm2 = math.sqrt(sum(b * b for b in v2))
@@ -28,7 +32,7 @@ def cosine_similarity(v1: list[float], v2: list[float]) -> float:
     return dot / (norm1 * norm2)
 
 def load_knowledge_base():
-    """Load text and generate embeddings for the knowledge base."""
+    """Load text and generate local embeddings for the knowledge base."""
     global _chunks, _embeddings
     if _chunks:
         return  # already loaded
@@ -50,15 +54,13 @@ def load_knowledge_base():
     _chunks = paragraphs
     
     try:
-        client = get_client()
-        # Embed all chunks at once (Google GenAI API allows list of strings)
-        response = client.models.embed_content(
-            model='text-embedding-004',
-            contents=_chunks
-        )
-        # Assuming response.embeddings is a list of objects with a .values attribute
-        _embeddings = [emb.values for emb in response.embeddings]
-        logger.info(f"Successfully loaded and embedded {len(_chunks)} chunks.")
+        model = get_embed_model()
+        if not model:
+            return
+        
+        # Embed all chunks offline
+        _embeddings = model.encode(_chunks, convert_to_numpy=False)
+        logger.info(f"Successfully loaded and locally embedded {len(_chunks)} chunks.")
     except Exception as e:
         logger.error(f"Error embedding knowledge base: {e}")
         _chunks = []
@@ -73,12 +75,11 @@ def retrieve(query: str, top_k: int = 3) -> str:
         return ""
         
     try:
-        client = get_client()
-        query_response = client.models.embed_content(
-            model='text-embedding-004',
-            contents=query
-        )
-        query_emb = query_response.embeddings[0].values
+        model = get_embed_model()
+        if not model:
+            return ""
+            
+        query_emb = model.encode([query], convert_to_numpy=False)[0]
         
         scored_chunks = []
         for i, chunk_emb in enumerate(_embeddings):

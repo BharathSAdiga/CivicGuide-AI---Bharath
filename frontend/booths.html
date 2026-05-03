@@ -21,6 +21,13 @@
       <li><a href="booths.html" class="active">Find Booth</a></li>
       <li><a href="chat.html">Assistant</a></li>
     </ul>
+    <div style="display: flex; align-items: center; gap: 1rem;">
+      <button class="theme-toggle" id="theme-toggle" aria-label="Toggle theme">
+        <span class="icon-sun">☀️</span>
+        <span class="icon-moon">🌙</span>
+      </button>
+      <button class="mobile-menu-btn" id="mobile-menu-btn" aria-label="Toggle menu">☰</button>
+    </div>
   </nav>
 
   <header class="page-header">
@@ -29,14 +36,7 @@
     <p class="page-subtitle">Enter your location or use GPS to find the nearest polling booths on the map.</p>
   </header>
 
-  <div class="api-warning">
-    <div class="warning-box">
-      ⚠️ &nbsp;Replace <code>YOUR_GOOGLE_MAPS_API_KEY</code> in this file with your actual
-      <a href="https://console.cloud.google.com/apis/library/maps-backend.googleapis.com" target="_blank" style="color:#fcd34d;">Google Maps API key</a>.
-      Enable <strong>Maps JavaScript API</strong> and <strong>Geocoding API</strong> in your Google Cloud Console.
-      Booth data is sample/mock data for demonstration.
-    </div>
-  </div>
+
 
   <div class="main-layout">
 
@@ -98,11 +98,13 @@
     Required APIs: Maps JavaScript API, Geocoding API
   -->
   <script>
-    window.GMAPS_API_KEY = "YOUR_GOOGLE_MAPS_API_KEY";
+    window.GMAPS_API_KEY = "AIzaSyDYKUwEHWiOpubnHUECdbDly-g5_Q8lpXo";
   </script>
+  <script src="js/main.js"></script>
+  <script src="js/theme.js"></script>
   <script type="module" src="js/booths.js"></script>
   <script
-    src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&callback=initMap&libraries=places"
+    src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDYKUwEHWiOpubnHUECdbDly-g5_Q8lpXo&callback=initMap&libraries=places"
     async defer
     onerror="window.mapsLoadError = true"
   ></script>

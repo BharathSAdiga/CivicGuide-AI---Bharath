@@ -1,0 +1,150 @@
+/* ═══════════════════════════════════════════════════════════
+   CivicGuide AI — Global Theme System
+   Light (default) + Dark mode via [data-theme="dark"]
+   ═══════════════════════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;600;700;800&display=swap');
+
+/* ─── Light Theme (Default) ─────────────────────────────── */
+:root {
+  --bg:            #f8fafc;
+  --bg-card:       rgba(255, 255, 255, 0.75);
+  --bg-card-solid: #ffffff;
+  --bg-input:      #f1f5f9;
+  --bg-elevated:   rgba(255, 255, 255, 0.85);
+
+  --accent:        #7c3aed;
+  --accent-2:      #3b82f6;
+  --accent-3:      #d946ef;
+  --accent-soft:   #6d28d9;
+  --gradient:      linear-gradient(135deg, #3b82f6, #7c3aed, #d946ef);
+
+  --text:          #1e293b;
+  --text-muted:    #64748b;
+  --text-on-accent: #ffffff;
+
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-hover:  rgba(99, 102, 241, 0.2);
+
+  --shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-lg:     0 8px 32px rgba(0, 0, 0, 0.08);
+  --shadow-glow:   0 8px 32px rgba(99, 102, 241, 0.12);
+
+  --user-bubble:   linear-gradient(135deg, #3b82f6, #7c3aed);
+  --ai-bubble:     #ffffff;
+
+  --eligible:      #16a34a;
+  --warning:       #d97706;
+  --error:         #dc2626;
+  --green:         #16a34a;
+
+  --radius:        20px;
+  --radius-sm:     12px;
+  --radius-xs:     8px;
+  --transition:    all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Ambient glow intensity */
+  --glow-1: rgba(99, 102, 241, 0.05);
+  --glow-2: rgba(6, 182, 212, 0.03);
+  --glow-3: rgba(139, 92, 246, 0.04);
+
+  /* Phase colour tokens */
+  --c-blue:    #2563eb;  --c-blue-bg:    rgba(37,99,235,0.08);   --c-blue-bd:    rgba(37,99,235,0.18);
+  --c-indigo:  #4f46e5;  --c-indigo-bg:  rgba(79,70,229,0.08);   --c-indigo-bd:  rgba(79,70,229,0.18);
+  --c-violet:  #7c3aed;  --c-violet-bg:  rgba(124,58,237,0.08);  --c-violet-bd:  rgba(124,58,237,0.18);
+  --c-cyan:    #0891b2;  --c-cyan-bg:    rgba(8,145,178,0.08);   --c-cyan-bd:    rgba(8,145,178,0.18);
+  --c-amber:   #d97706;  --c-amber-bg:   rgba(217,119,6,0.08);   --c-amber-bd:   rgba(217,119,6,0.18);
+  --c-green:   #16a34a;  --c-green-bg:   rgba(22,163,74,0.08);   --c-green-bd:   rgba(22,163,74,0.18);
+  --c-orange:  #ea580c;  --c-orange-bg:  rgba(234,88,12,0.08);   --c-orange-bd:  rgba(234,88,12,0.18);
+  --c-emerald: #059669;  --c-emerald-bg: rgba(5,150,105,0.08);   --c-emerald-bd: rgba(5,150,105,0.18);
+}
+
+/* ─── Dark Theme ────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:            #0b0f19;
+  --bg-card:       rgba(17, 24, 39, 0.5);
+  --bg-card-solid: #111827;
+  --bg-input:      rgba(26, 34, 53, 0.6);
+  --bg-elevated:   rgba(10, 14, 26, 0.88);
+
+  --accent:        #8b5cf6;
+  --accent-2:      #3b82f6;
+  --accent-3:      #d946ef;
+  --accent-soft:   #a5b4fc;
+  --gradient:      linear-gradient(135deg, #3b82f6, #8b5cf6, #d946ef);
+
+  --text:          #f8fafc;
+  --text-muted:    #94a3b8;
+  --text-on-accent: #ffffff;
+
+  --border:        rgba(255, 255, 255, 0.08);
+  --border-hover:  rgba(99, 102, 241, 0.35);
+
+  --shadow-sm:     0 1px 3px rgba(0, 0, 0, 0.2);
+  --shadow-md:     0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow-lg:     0 8px 32px rgba(0, 0, 0, 0.35);
+  --shadow-glow:   0 8px 32px rgba(99, 102, 241, 0.2);
+
+  --user-bubble:   linear-gradient(135deg, #3b82f6, #8b5cf6);
+  --ai-bubble:     rgba(26, 34, 53, 0.7);
+
+  --eligible:      #4ade80;
+  --warning:       #fbbf24;
+  --error:         #f87171;
+  --green:         #22c55e;
+
+  --glow-1: rgba(99, 102, 241, 0.1);
+  --glow-2: rgba(6, 182, 212, 0.06);
+  --glow-3: rgba(139, 92, 246, 0.08);
+
+  --c-blue:    #3b82f6;  --c-blue-bg:    rgba(59,130,246,0.12);  --c-blue-bd:    rgba(59,130,246,0.3);
+  --c-indigo:  #6366f1;  --c-indigo-bg:  rgba(99,102,241,0.12);  --c-indigo-bd:  rgba(99,102,241,0.3);
+  --c-violet:  #8b5cf6;  --c-violet-bg:  rgba(139,92,246,0.12);  --c-violet-bd:  rgba(139,92,246,0.3);
+  --c-cyan:    #06b6d4;  --c-cyan-bg:    rgba(6,182,212,0.12);   --c-cyan-bd:    rgba(6,182,212,0.3);
+  --c-amber:   #f59e0b;  --c-amber-bg:   rgba(245,158,11,0.12);  --c-amber-bd:   rgba(245,158,11,0.3);
+  --c-green:   #22c55e;  --c-green-bg:   rgba(34,197,94,0.12);   --c-green-bd:   rgba(34,197,94,0.3);
+  --c-orange:  #f97316;  --c-orange-bg:  rgba(249,115,22,0.12);  --c-orange-bd:  rgba(249,115,22,0.3);
+  --c-emerald: #10b981;  --c-emerald-bg: rgba(16,185,129,0.12);  --c-emerald-bd: rgba(16,185,129,0.3);
+}
+
+/* ─── Theme Toggle Button ───────────────────────────────── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 42px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: var(--transition);
+  font-size: 1.25rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.theme-toggle:hover {
+  border-color: var(--border-hover);
+  transform: scale(1.05);
+  box-shadow: var(--shadow-md);
+}
+
+/* Show/hide icons based on theme */
+.theme-toggle .icon-sun  { display: inline; }
+.theme-toggle .icon-moon { display: none;   }
+
+[data-theme="dark"] .theme-toggle .icon-sun  { display: none;   }
+[data-theme="dark"] .theme-toggle .icon-moon { display: inline; }
+
+/* ─── Smooth Theme Transition ───────────────────────────── */
+html.theme-transitioning,
+html.theme-transitioning *,
+html.theme-transitioning *::before,
+html.theme-transitioning *::after {
+  transition: background-color 0.4s ease,
+              color 0.4s ease,
+              border-color 0.4s ease,
+              box-shadow 0.4s ease !important;
+}
